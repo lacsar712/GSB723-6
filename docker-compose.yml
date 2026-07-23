@@ -1,0 +1,99 @@
+services:
+  db:
+    image: docker.m.daocloud.io/library/mysql:8.0
+    container_name: label-2006-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root123
+      MYSQL_DATABASE: agent_platform_db
+      MYSQL_CHARSET: utf8mb4
+      MYSQL_COLLATION: utf8mb4_unicode_ci
+    ports:
+      - "5006:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot123"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    networks:
+      - app-network
+
+  backend:
+    build: ./backend
+    container_name: label-2006-backend
+    restart: unless-stopped
+    environment:
+      PORT: 8006
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: agent_platform_db
+      DB_USER: root
+      DB_PASS: root123
+      DATA_DIR: /app/data
+      NODE_ENV: production
+    ports:
+      - "8006:8006"
+    volumes:
+      - file_data:/app/data
+    depends_on:
+      db:
+        condition: service_healthy
+      seed:
+        condition: service_completed_successfully
+    networks:
+      - app-network
+
+  seed:
+    build: ./backend
+    container_name: label-2006-seed
+    environment:
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: agent_platform_db
+      DB_USER: root
+      DB_PASS: root123
+      DATA_DIR: /app/data
+    command: ["node", "src/seed/index.js"]
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+    volumes:
+      - file_data:/app/data
+    networks:
+      - app-network
+
+  frontend:
+    build: ./frontend
+    container_name: label-2006-frontend
+    restart: unless-stopped
+    ports:
+      - "3006:80"
+    depends_on:
+      - backend
+    networks:
+      - app-network
+
+  agent-php:
+    build: ./agent-php
+    container_name: label-2006-agent-php
+    restart: unless-stopped
+    environment:
+      BACKEND_URL: http://backend:8006
+    ports:
+      - "8306:80"
+    depends_on:
+      - backend
+    networks:
+      - app-network
+
+volumes:
+  db_data:
+  file_data:
+
+networks:
+  app-network:
+    driver: bridge

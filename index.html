@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>标准文件管理子模块</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: { 50:'#eff6ff',100:'#dbeafe',200:'#bfdbfe',300:'#93c5fd',400:'#60a5fa',500:'#3b82f6',600:'#2563eb',700:'#1d4ed8',800:'#1e40af',900:'#1e3a8a' },
+                        sidebar: { bg:'#e8f4fd', hover:'#d0e8f7', active:'#b8dcf1', text:'#1e3a5f', border:'#c5dff0' }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        * { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif; }
+        html { scroll-behavior: smooth; }
+        body { background: linear-gradient(135deg, #f0f7ff 0%, #f5f3ff 50%, #fef3f2 100%); }
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #c5d5e4; border-radius: 3px; }
+        .sidebar { background: linear-gradient(180deg, #e8f4fd 0%, #d6ecfa 100%); }
+        .nav-item { transition: all .25s ease; border-left: 3px solid transparent; }
+        .nav-item:hover { background: rgba(59,130,246,.08); border-left-color: #93c5fd; }
+        .nav-item.active { background: rgba(59,130,246,.12); border-left-color: #3b82f6; color: #1d4ed8; font-weight: 600; }
+        .nav-sub-item { transition: all .2s ease; }
+        .nav-sub-item:hover { color: #2563eb; background: rgba(59,130,246,.06); }
+        .nav-sub-item.active { color: #1d4ed8; font-weight: 500; }
+        .glass-card { background: rgba(255,255,255,.88); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,.6); box-shadow: 0 4px 24px rgba(0,0,0,.04); transition: all .3s ease; }
+        .glass-card:hover { box-shadow: 0 8px 40px rgba(0,0,0,.08); transform: translateY(-1px); }
+        .btn-primary { background: linear-gradient(135deg,#3b82f6,#2563eb); transition: all .25s ease; }
+        .btn-primary:hover { background: linear-gradient(135deg,#2563eb,#1d4ed8); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(37,99,235,.3); }
+        .tag { transition: all .2s ease; }
+        .tag:hover { transform: scale(1.05); }
+        .data-table tr { transition: background .15s ease; }
+        .data-table tbody tr:hover { background: #f8fafc; }
+        .tab-item { transition: all .25s ease; position: relative; }
+        .tab-item::after { content:''; position:absolute; bottom:0; left:50%; width:0; height:2px; background:#3b82f6; transition:all .25s ease; transform:translateX(-50%); }
+        .tab-item.active::after { width:80%; }
+        .tab-item.active { color:#2563eb; font-weight:600; }
+        .search-glow:focus-within { box-shadow:0 0 0 3px rgba(59,130,246,.15); border-color:#93c5fd; }
+        .tree-node { transition: all .2s ease; cursor: pointer; }
+        .tree-node:hover { background: #f0f7ff; }
+        .tree-children { overflow: hidden; transition: max-height .35s ease, opacity .25s ease; }
+        .video-card { transition: all .3s ease; }
+        .video-card:hover { transform: translateY(-4px); box-shadow: 0 12px 40px rgba(0,0,0,.1); }
+        .video-card .play-btn { transition: all .25s ease; opacity:.85; }
+        .video-card:hover .play-btn { opacity:1; transform:scale(1.1); }
+        .faq-item { transition: all .2s ease; }
+        .faq-item:hover { background: #fafbfc; }
+        .status-active { background:#dcfce7; color:#166534; }
+        .status-expired { background:#fef3c7; color:#92400e; }
+        .status-draft { background:#f1f5f9; color:#475569; }
+        .page-section { display: none; }
+        .page-section.active { display: block; }
+        .sub-section { display: none; }
+        .sub-section.active { display: block; }
+        .interpret-content { display: none; }
+        .interpret-content.active { display: block; }
+        @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+        .fade-in { animation: fadeIn .3s ease; }
+        @keyframes pulse-badge { 0%,100% { opacity:1; } 50% { opacity:.7; } }
+        .badge-pulse { animation: pulse-badge 2s infinite; }
+        .modal-overlay { transition: opacity .3s ease; }
+        .modal-panel { transition: transform .3s ease, opacity .3s ease; }
+        .tooltip-w { position:relative; }
+        .tooltip-w .tip { visibility:hidden; opacity:0; position:absolute; z-index:50; bottom:100%; left:50%; transform:translateX(-50%); padding:4px 10px; background:#1e293b; color:#fff; font-size:11px; border-radius:6px; white-space:nowrap; transition:all .2s ease; margin-bottom:6px; }
+        .tooltip-w:hover .tip { visibility:visible; opacity:1; }
+        .clause-item.selected { border-color:#93c5fd; background:rgba(59,130,246,.06); }
+    </style>
+</head>
+<body class="min-h-screen flex">
+
+<!-- ========== LEFT SIDEBAR ========== -->
+<aside class="sidebar w-60 min-h-screen flex-shrink-0 border-r border-sidebar-border fixed left-0 top-0 bottom-0 z-30 flex flex-col">
+    <div class="px-5 py-5 border-b border-sidebar-border">
+        <div class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center shadow-md">
+                <i class="fas fa-file-shield text-white text-sm"></i>
+            </div>
+            <div>
+                <h1 class="text-sm font-bold text-sidebar-text leading-tight">标准文件管理</h1>
+                <p class="text-[10px] text-sidebar-text/60 mt-0.5">Standard Document Hub</p>
+            </div>
+        </div>
+    </div>
+    <nav class="flex-1 py-3 overflow-y-auto" id="sidebarNav">
+        <div class="px-4 mb-2"><span class="text-[10px] font-semibold text-sidebar-text/40 uppercase tracking-widest">功能模块</span></div>
+        <div class="mb-1">
+            <div class="nav-item active flex items-center gap-3 px-5 py-2.5" data-page="file-storage" onclick="switchPage('file-storage',this)">
+                <i class="fas fa-folder-tree text-blue-500 w-4 text-center text-sm"></i>
+                <span class="text-[13px] text-sidebar-text">标准文件分类存储</span>
+            </div>
+            <div class="pl-12 space-y-0.5 mt-0.5" id="sub-nav-file-storage">
+                <div class="nav-sub-item active py-1.5 px-3 rounded-md text-xs text-sidebar-text/70 cursor-pointer" data-sub="tree-view" onclick="switchSub('tree-view',this,'file-storage')">文件体系管理</div>
+                <div class="nav-sub-item py-1.5 px-3 rounded-md text-xs text-sidebar-text/70 cursor-pointer" data-sub="version-mgmt" onclick="switchSub('version-mgmt',this,'file-storage')">版本管理</div>
+                <div class="nav-sub-item py-1.5 px-3 rounded-md text-xs text-sidebar-text/70 cursor-pointer" data-sub="relation-config" onclick="switchSub('relation-config',this,'file-storage')">关联配置</div>
+            </div>
+        </div>
+        <div class="mb-1">
+            <div class="nav-item flex items-center gap-3 px-5 py-2.5" data-page="file-search" onclick="switchPage('file-search',this)">
+                <i class="fas fa-magnifying-glass text-emerald-500 w-4 text-center text-sm"></i>
+                <span class="text-[13px] text-sidebar-text">标准文件精准检索</span>
+            </div>
+        </div>
+        <div class="mb-1">
+            <div class="nav-item flex items-center gap-3 px-5 py-2.5" data-page="interpret" onclick="switchPage('interpret',this)">
+                <i class="fas fa-play-circle text-purple-500 w-4 text-center text-sm"></i>
+                <span class="text-[13px] text-sidebar-text">标准解读服务</span>
+            </div>
+            <div class="pl-12 space-y-0.5 mt-0.5 hidden" id="sub-nav-interpret">
+                <div class="nav-sub-item active py-1.5 px-3 rounded-md text-xs text-sidebar-text/70 cursor-pointer" data-sub="video" onclick="switchInterpretSub('video',this)">视频解读</div>
+                <div class="nav-sub-item py-1.5 px-3 rounded-md text-xs text-sidebar-text/70 cursor-pointer" data-sub="article" onclick="switchInterpretSub('article',this)">图文解读</div>
+                <div class="nav-sub-item py-1.5 px-3 rounded-md text-xs text-sidebar-text/70 cursor-pointer" data-sub="related" onclick="switchInterpretSub('related',this)">关联匹配</div>
+            </div>
+        </div>
+        <div class="mb-1">
+            <div class="nav-item flex items-center gap-3 px-5 py-2.5" data-page="faq" onclick="switchPage('faq',this)">
+                <i class="fas fa-circle-question text-amber-500 w-4 text-center text-sm"></i>
+                <span class="text-[13px] text-sidebar-text">常见问题库</span>
+            </div>
+        </div>
+    </nav>
+    <div class="px-5 py-3 border-t border-sidebar-border">
+        <div class="flex items-center gap-2 text-[10px] text-sidebar-text/50"><i class="fas fa-shield-halved"></i><span>工业互联网平台标准管理</span></div>
+    </div>
+</aside>
+
+<!-- ========== MAIN CONTENT ========== -->
+<main class="flex-1 ml-60 min-h-screen">
+    <!-- Top Header -->
+    <header class="sticky top-0 z-20 bg-white/70 backdrop-blur-xl border-b border-gray-100 px-8 py-3">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2 text-sm text-gray-500" id="breadcrumb">
+                <span class="cursor-pointer hover:text-blue-600">首页</span>
+                <i class="fas fa-chevron-right text-[10px] text-gray-300"></i>
+                <span class="cursor-pointer hover:text-blue-600">标准文件管理</span>
+                <i class="fas fa-chevron-right text-[10px] text-gray-300"></i>
+                <span class="text-gray-800 font-medium" id="breadcrumb-current">标准文件分类存储</span>
+            </div>
+            <div class="flex items-center gap-4">
+                <div class="relative">
+                    <input type="text" placeholder="全局搜索..." class="w-52 pl-9 pr-4 py-2 text-sm rounded-xl border border-gray-200 focus:outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-50 bg-gray-50/50 transition-all">
+                    <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+                </div>
+                <div class="tooltip-w">
+                    <button class="w-8 h-8 rounded-lg bg-gray-50 hover:bg-gray-100 flex items-center justify-center transition-all relative">
+                        <i class="fas fa-bell text-gray-500 text-sm"></i>
+                        <span class="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-red-500 rounded-full text-[8px] text-white flex items-center justify-center badge-pulse">3</span>
+                    </button>
+                    <span class="tip">3条新通知</span>
+                </div>
+                <div class="flex items-center gap-2 cursor-pointer hover:bg-gray-50 rounded-lg px-2 py-1 transition-all">
+                    <div class="w-7 h-7 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center">
+                        <i class="fas fa-user text-white text-[10px]"></i>
+                    </div>
+                    <span class="text-sm text-gray-700">管理员</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="p-8">
+
+    <!-- ==================== PAGE 1: 标准文件分类存储 ==================== -->
+    <section id="page-file-storage" class="page-section active fade-in">
+        <div class="mb-6 flex items-center justify-between">
+            <div>
+                <h2 class="text-xl font-bold text-gray-800 flex items-center gap-2"><span class="w-1 h-6 bg-blue-500 rounded-full"></span>标准文件分类存储</h2>
+                <p class="text-sm text-gray-500 mt-1 ml-3">构建"国家-地方-行业"三级标准文件体系</p>
+            </div>
+            <div class="flex items-center gap-3">
+                <button class="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all"><i class="fas fa-download"></i> 批量导出</button>
+                <button class="btn-primary flex items-center gap-2 px-4 py-2 text-sm text-white rounded-xl shadow-md" onclick="openModal('uploadModal')"><i class="fas fa-plus"></i> 上传文件</button>
+            </div>
+        </div>
+        <!-- Stats -->
+        <div class="grid grid-cols-4 gap-4 mb-6">
+            <div class="glass-card rounded-2xl p-4"><div class="flex items-center justify-between"><div><p class="text-xs text-gray-500 mb-1">文件总量</p><p class="text-2xl font-bold text-gray-800">1,286</p><p class="text-[11px] text-emerald-600 mt-1"><i class="fas fa-arrow-up"></i> 较上月 +23</p></div><div class="w-11 h-11 rounded-xl bg-blue-50 flex items-center justify-center"><i class="fas fa-file-lines text-blue-500 text-lg"></i></div></div></div>
+            <div class="glass-card rounded-2xl p-4"><div class="flex items-center justify-between"><div><p class="text-xs text-gray-500 mb-1">国家标准</p><p class="text-2xl font-bold text-gray-800">438</p><p class="text-[11px] text-blue-600 mt-1"><i class="fas fa-building-columns"></i> 占比 34%</p></div><div class="w-11 h-11 rounded-xl bg-red-50 flex items-center justify-center"><i class="fas fa-landmark text-red-400 text-lg"></i></div></div></div>
+            <div class="glass-card rounded-2xl p-4"><div class="flex items-center justify-between"><div><p class="text-xs text-gray-500 mb-1">地方标准</p><p class="text-2xl font-bold text-gray-800">512</p><p class="text-[11px] text-purple-600 mt-1"><i class="fas fa-map-location-dot"></i> 覆盖 31 省份</p></div><div class="w-11 h-11 rounded-xl bg-purple-50 flex items-center justify-center"><i class="fas fa-map text-purple-400 text-lg"></i></div></div></div>
+            <div class="glass-card rounded-2xl p-4"><div class="flex items-center justify-between"><div><p class="text-xs text-gray-500 mb-1">行业标准</p><p class="text-2xl font-bold text-gray-800">336</p><p class="text-[11px] text-amber-600 mt-1"><i class="fas fa-industry"></i> 涵盖 12 领域</p></div><div class="w-11 h-11 rounded-xl bg-amber-50 flex items-center justify-center"><i class="fas fa-industry text-amber-400 text-lg"></i></div></div></div>
+        </div>
+
+        <!-- Sub: tree-view -->
+        <div id="sub-tree-view" class="sub-section active fade-in">
+            <div class="grid grid-cols-12 gap-6">
+                <div class="col-span-4">
+                    <div class="glass-card rounded-2xl p-5">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-sm font-semibold text-gray-700">三级标准文件体系</h3>
+                            <button class="text-xs text-blue-600 hover:text-blue-700" onclick="expandAllTree()"><i class="fas fa-expand-alt mr-1"></i>全部展开</button>
+                        </div>
+                        <div class="space-y-1" id="fileTree">
+                            <!-- 国家标准 -->
+                            <div>
+                                <div class="tree-node flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-50/50" onclick="toggleTree(this)">
+                                    <i class="fas fa-chevron-down text-[10px] text-blue-400 transition-transform duration-200 w-3"></i>
+                                    <i class="fas fa-landmark text-red-400 text-sm"></i>
+                                    <span class="text-sm font-medium text-gray-700">国家标准</span>
+                                    <span class="ml-auto text-[11px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">438</span>
+                                </div>
+                                <div class="tree-children pl-5 mt-1 space-y-0.5" style="max-height:500px;opacity:1">
+                                    <div><div class="tree-node flex items-center gap-2 px-3 py-1.5 rounded-lg" onclick="toggleTree(this)"><i class="fas fa-chevron-right text-[10px] text-gray-400 transition-transform duration-200 w-3"></i><i class="fas fa-folder text-blue-400 text-xs"></i><span class="text-[13px] text-gray-600">工业互联网平台分类分级</span><span class="ml-auto text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">156</span></div>
+                                    <div class="tree-children pl-5 space-y-0.5" style="max-height:0;opacity:0;overflow:hidden">
+                                        <div class="tree-node flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-blue-50"><i class="fas fa-file-pdf text-red-400 text-xs w-3"></i><span class="text-xs text-gray-600 truncate">GB/T 42021-2023 分类分级指南</span></div>
+                                        <div class="tree-node flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-blue-50"><i class="fas fa-file-pdf text-red-400 text-xs w-3"></i><span class="text-xs text-gray-600 truncate">GB/T 40118-2021 应用实施指南</span></div>
+                                        <div class="tree-node flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-blue-50"><i class="fas fa-file-pdf text-red-400 text-xs w-3"></i><span class="text-xs text-gray-600 truncate">GB/T 41870-2022 智能制造通用要求</span></div>
+                                    </div></div>
+                                    <div><div class="tree-node flex items-center gap-2 px-3 py-1.5 rounded-lg" onclick="toggleTree(this)"><i class="fas fa-chevron-right text-[10px] text-gray-400 transition-transform duration-200 w-3"></i><i class="fas fa-folder text-blue-400 text-xs"></i><span class="text-[13px] text-gray-600">服务能力评估标准</span><span class="ml-auto text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">98</span></div>
+                                    <div class="tree-children pl-5 space-y-0.5" style="max-height:0;opacity:0;overflow:hidden">
+                                        <div class="tree-node flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-blue-50"><i class="fas fa-file-pdf text-red-400 text-xs w-3"></i><span class="text-xs text-gray-600 truncate">GB/T 39116-2020 信息技术服务评估</span></div>
+                                    </div></div>
+                                    <div><div class="tree-node flex items-center gap-2 px-3 py-1.5 rounded-lg" onclick="toggleTree(this)"><i class="fas fa-chevron-right text-[10px] text-gray-400 transition-transform duration-200 w-3"></i><i class="fas fa-folder text-blue-400 text-xs"></i><span class="text-[13px] text-gray-600">安全防护标准</span><span class="ml-auto text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">72</span></div>
+                                    <div class="tree-children pl-5 space-y-0.5" style="max-height:0;opacity:0;overflow:hidden">
+                                        <div class="tree-node flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-blue-50"><i class="fas fa-file-pdf text-red-400 text-xs w-3"></i><span class="text-xs text-gray-600 truncate">GB/T 37024-2018 信息安全技术</span></div>
+                                    </div></div>
+                                </div>
+                            </div>
+                            <!-- 地方标准 -->
+                            <div>
+                                <div class="tree-node flex items-center gap-2 px-3 py-2 rounded-lg" onclick="toggleTree(this)">
+                                    <i class="fas fa-chevron-right text-[10px] text-gray-400 transition-transform duration-200 w-3"></i>
+                                    <i class="fas fa-map text-purple-400 text-sm"></i>
+                                    <span class="text-sm font-medium text-gray-700">地方标准</span>
+                                    <span class="ml-auto text-[11px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">512</span>
+                                </div>
+                                <div class="tree-children pl-5 mt-1 space-y-0.5" style="max-height:0;opacity:0;overflow:hidden">
+                                    <div class="tree-node flex items-center gap-2 px-3 py-1.5 rounded-lg"><i class="fas fa-folder text-purple-400 text-xs w-3"></i><span class="text-[13px] text-gray-600">广东省实施细则 (86)</span></div>
+                                    <div class="tree-node flex items-center gap-2 px-3 py-1.5 rounded-lg"><i class="fas fa-folder text-purple-400 text-xs w-3"></i><span class="text-[13px] text-gray-600">浙江省实施细则 (73)</span></div>
+                                    <div class="tree-node flex items-center gap-2 px-3 py-1.5 rounded-lg"><i class="fas fa-folder text-purple-400 text-xs w-3"></i><span class="text-[13px] text-gray-600">山东省实施细则 (64)</span></div>
+                                    <div class="tree-node flex items-center gap-2 px-3 py-1.5 rounded-lg"><i class="fas fa-folder text-purple-400 text-xs w-3"></i><span class="text-[13px] text-gray-600">江苏省实施细则 (58)</span></div>
+                                </div>
+                            </div>
+                            <!-- 行业标准 -->
+                            <div>
+                                <div class="tree-node flex items-center gap-2 px-3 py-2 rounded-lg" onclick="toggleTree(this)">
+                                    <i class="fas fa-chevron-right text-[10px] text-gray-400 transition-transform duration-200 w-3"></i>
+                                    <i class="fas fa-industry text-amber-400 text-sm"></i>
+                                    <span class="text-sm font-medium text-gray-700">行业标准</span>
+                                    <span class="ml-auto text-[11px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">336</span>
+                                </div>
+                                <div class="tree-children pl-5 mt-1 space-y-0.5" style="max-height:0;opacity:0;overflow:hidden">
+                                    <div class="tree-node flex items-center gap-2 px-3 py-1.5 rounded-lg"><i class="fas fa-folder text-amber-400 text-xs w-3"></i><span class="text-[13px] text-gray-600">YD/T 通信行业标准 (124)</span></div>
+                                    <div class="tree-node flex items-center gap-2 px-3 py-1.5 rounded-lg"><i class="fas fa-folder text-amber-400 text-xs w-3"></i><span class="text-[13px] text-gray-600">QC/T 汽车行业标准 (89)</span></div>
+                                    <div class="tree-node flex items-center gap-2 px-3 py-1.5 rounded-lg"><i class="fas fa-folder text-amber-400 text-xs w-3"></i><span class="text-[13px] text-gray-600">JB/T 机械行业标准 (67)</span></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Right File List -->
+                <div class="col-span-8">
+                    <div class="glass-card rounded-2xl p-5">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="flex items-center gap-3"><h3 class="text-sm font-semibold text-gray-700">文件列表</h3><span class="text-xs text-gray-400">共 156 项</span></div>
+                            <div class="flex items-center gap-2">
+                                <div class="search-glow flex items-center gap-2 border border-gray-200 rounded-xl px-3 py-1.5 transition-all"><i class="fas fa-search text-gray-400 text-xs"></i><input type="text" placeholder="筛选文件..." class="text-xs focus:outline-none bg-transparent w-28"></div>
+                                <select class="text-xs border border-gray-200 rounded-xl px-3 py-1.5 focus:outline-none focus:border-blue-300 bg-white"><option>全部状态</option><option>生效中</option><option>已废止</option><option>草案</option></select>
+                            </div>
+                        </div>
+                        <div class="overflow-hidden rounded-xl border border-gray-100">
+                            <table class="w-full data-table">
+                                <thead><tr class="bg-gray-50/80"><th class="text-left text-[11px] font-medium text-gray-500 px-4 py-3">文件编号</th><th class="text-left text-[11px] font-medium text-gray-500 px-4 py-3">文件名称</th><th class="text-left text-[11px] font-medium text-gray-500 px-4 py-3">发布时间</th><th class="text-left text-[11px] font-medium text-gray-500 px-4 py-3">状态</th><th class="text-left text-[11px] font-medium text-gray-500 px-4 py-3">版本</th><th class="text-right text-[11px] font-medium text-gray-500 px-4 py-3">操作</th></tr></thead>
+                                <tbody class="divide-y divide-gray-50">
+                                    <tr class="cursor-pointer" onclick="openModal('fileDetailModal')"><td class="px-4 py-3 text-xs text-blue-600 font-medium">GB/T 42021-2023</td><td class="px-4 py-3 text-xs text-gray-700">工业互联网平台 分类分级指南</td><td class="px-4 py-3 text-xs text-gray-500">2023-01-18</td><td class="px-4 py-3"><span class="status-active text-[10px] px-2 py-0.5 rounded-full font-medium">生效中</span></td><td class="px-4 py-3 text-xs text-gray-500">v1.0</td><td class="px-4 py-3 text-right"><div class="flex items-center justify-end gap-1"><button class="w-7 h-7 rounded-lg hover:bg-blue-50 flex items-center justify-center text-gray-400 hover:text-blue-500 transition-all" title="预览"><i class="fas fa-eye text-xs"></i></button><button class="w-7 h-7 rounded-lg hover:bg-blue-50 flex items-center justify-center text-gray-400 hover:text-blue-500 transition-all" title="下载"><i class="fas fa-download text-xs"></i></button><button class="w-7 h-7 rounded-lg hover:bg-blue-50 flex items-center justify-center text-gray-400 hover:text-blue-500 transition-all" title="关联"><i class="fas fa-link text-xs"></i></button></div></td></tr>
+                                    <tr class="cursor-pointer"><td class="px-4 py-3 text-xs text-blue-600 font-medium">GB/T 40118-2021</td><td class="px-4 py-3 text-xs text-gray-700">工业互联网平台 应用实施指南 第1部分：总则</td><td class="px-4 py-3 text-xs text-gray-500">2021-08-20</td><td class="px-4 py-3"><span class="status-active text-[10px] px-2 py-0.5 rounded-full font-medium">生效中</span></td><td class="px-4 py-3 text-xs text-gray-500">v2.1</td><td class="px-4 py-3 text-right"><div class="flex items-center justify-end gap-1"><button class="w-7 h-7 rounded-lg hover:bg-blue-50 flex items-center justify-center text-gray-400 hover:text-blue-500 transition-all"><i class="fas fa-eye text-xs"></i></button><button class="w-7 h-7 rounded-lg hover:bg-blue-50 flex items-center justify-center text-gray-400 hover:text-blue-500 transition-all"><i class="fas fa-download text-xs"></i></button><button class="w-7 h-7 rounded-lg hover:bg-blue-50 flex items-center justify-center text-gray-400 hover:text-blue-500 transition-all"><i class="fas fa-link text-xs"></i></button></div></td></tr>
+                                    <tr class="cursor-pointer"><td class="px-4 py-3 text-xs text-blue-600 font-medium">GB/T 41870-2022</td><td class="px-4 py-3 text-xs text-gray-700">智能制造 工业互联网平台 通用要求</td><td class="px-4 py-3 text-xs text-gray-500">2022-10-12</td><td class="px-4 py-3"><span class="status-active text-[10px] px-2 py-0.5 rounded-full font-medium">生效中</span></td><td class="px-4 py-3 text-xs text-gray-500">v1.2</td><td class="px-4 py-3 text-right"><div class="flex items-center justify-end gap-1"><button class="w-7 h-7 rounded-lg hover:bg-blue-50 flex items-center justify-center text-gray-400 hover:text-blue-500 transition-all"><i class="fas fa-eye text-xs"></i></button><button class="w-7 h-7 rounded-lg hover:bg-blue-50 flex items-center justify-center text-gray-400 hover:text-blue-500 transition-all"><i class="fas fa-download text-xs"></i></button><button class="w-7 h-7 rounded-lg hover:bg-blue-50 flex items-center justify-center text-gray-400 hover:text-blue-500 transition-all"><i class="fas fa-link text-xs"></i></button></div></td></tr>
+                                    <tr class="cursor-pointer"><td class="px-4 py-3 text-xs text-blue-600 font-medium">GB/T 25069-2022</td><td class="px-4 py-3 text-xs text-gray-700">信息安全技术 术语 (工业互联网补充条款)</td><td class="px-4 py-3 text-xs text-gray-500">2022-06-30</td><td class="px-4 py-3"><span class="status-expired text-[10px] px-2 py-0.5 rounded-full font-medium">已废止</span></td><td class="px-4 py-3 text-xs text-gray-500">v3.0</td><td class="px-4 py-3 text-right"><div class="flex items-center justify-end gap-1"><button class="w-7 h-7 rounded-lg hover:bg-blue-50 flex items-center justify-center text-gray-400 hover:text-blue-500 transition-all"><i class="fas fa-eye text-xs"></i></button><button class="w-7 h-7 rounded-lg hover:bg-blue-50 flex items-center justify-center text-gray-400 hover:text-blue-500 transition-all"><i class="fas fa-download text-xs"></i></button><button class="w-7 h-7 rounded-lg hover:bg-blue-50 flex items-center justify-center text-gray-400 hover:text-blue-500 transition-all"><i class="fas fa-link text-xs"></i></button></div></td></tr>
+                                    <tr class="cursor-pointer"><td class="px-4 py-3 text-xs text-blue-600 font-medium">GB/T 23031.1-2022</td><td class="px-4 py-3 text-xs text-gray-700">工业互联网平台 企业应用水平与绩效评价</td><td class="px-4 py-3 text-xs text-gray-500">2022-03-15</td><td class="px-4 py-3"><span class="status-active text-[10px] px-2 py-0.5 rounded-full font-medium">生效中</span></td><td class="px-4 py-3 text-xs text-gray-500">v1.0</td><td class="px-4 py-3 text-right"><div class="flex items-center justify-end gap-1"><button class="w-7 h-7 rounded-lg hover:bg-blue-50 flex items-center justify-center text-gray-400 hover:text-blue-500 transition-all"><i class="fas fa-eye text-xs"></i></button><button class="w-7 h-7 rounded-lg hover:bg-blue-50 flex items-center justify-center text-gray-400 hover:text-blue-500 transition-all"><i class="fas fa-download text-xs"></i></button><button class="w-7 h-7 rounded-lg hover:bg-blue-50 flex items-center justify-center text-gray-400 hover:text-blue-500 transition-all"><i class="fas fa-link text-xs"></i></button></div></td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="flex items-center justify-between mt-4">
+                            <span class="text-xs text-gray-400">显示 1-5 / 共 156 条</span>
+                            <div class="flex items-center gap-1">
+                                <button class="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center text-gray-400 hover:bg-gray-50 text-xs"><i class="fas fa-chevron-left"></i></button>
+                                <button class="w-8 h-8 rounded-lg bg-blue-500 text-white flex items-center justify-center text-xs font-medium">1</button>
+                                <button class="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50 text-xs">2</button>
+                                <button class="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50 text-xs">3</button>
+                                <span class="text-gray-400 text-xs px-1">...</span>
+                                <button class="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50 text-xs">32</button>
+                                <button class="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center text-gray-400 hover:bg-gray-50 text-xs"><i class="fas fa-chevron-right"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sub: version-mgmt -->
+        <div id="sub-version-mgmt" class="sub-section fade-in">
+            <div class="glass-card rounded-2xl p-6">
+                <div class="flex items-center justify-between mb-5"><h3 class="text-sm font-semibold text-gray-700">版本管理记录</h3><select class="text-xs border border-gray-200 rounded-xl px-3 py-1.5 focus:outline-none bg-white"><option>全部文件</option><option>国家标准</option><option>地方标准</option><option>行业标准</option></select></div>
+                <div class="space-y-0">
+                    <div class="flex gap-4 pb-6 relative"><div class="flex flex-col items-center"><div class="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center z-10"><i class="fas fa-arrow-up text-white text-xs"></i></div><div class="w-0.5 flex-1 bg-gray-200 mt-1"></div></div><div class="flex-1 glass-card rounded-xl p-4"><div class="flex items-center justify-between mb-2"><div class="flex items-center gap-2"><span class="text-sm font-medium text-gray-700">GB/T 40118-2021 升级至 v2.1</span><span class="status-active text-[10px] px-2 py-0.5 rounded-full">已发布</span></div><span class="text-xs text-gray-400">2024-01-15</span></div><p class="text-xs text-gray-500 mb-2">更新内容：修订第5.3条款关于平台分类评估指标的描述，新增附录D</p><div class="flex items-center gap-4 text-[11px] text-gray-400"><span><i class="fas fa-user mr-1"></i>工信部标准化司</span><span><i class="fas fa-file-lines mr-1"></i>变更 3 处</span></div></div></div>
+                    <div class="flex gap-4 pb-6 relative"><div class="flex flex-col items-center"><div class="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center z-10"><i class="fas fa-plus text-white text-xs"></i></div><div class="w-0.5 flex-1 bg-gray-200 mt-1"></div></div><div class="flex-1 glass-card rounded-xl p-4"><div class="flex items-center justify-between mb-2"><div class="flex items-center gap-2"><span class="text-sm font-medium text-gray-700">GB/T 42021-2023 首次发布 v1.0</span><span class="status-active text-[10px] px-2 py-0.5 rounded-full">已发布</span></div><span class="text-xs text-gray-400">2023-01-18</span></div><p class="text-xs text-gray-500 mb-2">工业互联网平台分类分级指南正式发布</p><div class="flex items-center gap-4 text-[11px] text-gray-400"><span><i class="fas fa-user mr-1"></i>国家标准化管理委员会</span><span><i class="fas fa-file-lines mr-1"></i>全新文件</span></div></div></div>
+                    <div class="flex gap-4 pb-6 relative"><div class="flex flex-col items-center"><div class="w-8 h-8 rounded-full bg-amber-500 flex items-center justify-center z-10"><i class="fas fa-pen text-white text-xs"></i></div><div class="w-0.5 flex-1 bg-gray-200 mt-1"></div></div><div class="flex-1 glass-card rounded-xl p-4"><div class="flex items-center justify-between mb-2"><div class="flex items-center gap-2"><span class="text-sm font-medium text-gray-700">GB/T 23031.1-2022 发布 v1.0</span><span class="status-active text-[10px] px-2 py-0.5 rounded-full">已发布</span></div><span class="text-xs text-gray-400">2022-03-15</span></div><p class="text-xs text-gray-500">企业应用水平与绩效评价标准发布</p></div></div>
+                    <div class="flex gap-4"><div class="flex flex-col items-center"><div class="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center z-10"><i class="fas fa-ban text-white text-xs"></i></div></div><div class="flex-1 glass-card rounded-xl p-4 opacity-60"><div class="flex items-center justify-between mb-2"><div class="flex items-center gap-2"><span class="text-sm font-medium text-gray-700">GB/T 25069-2022 标记为废止</span><span class="status-expired text-[10px] px-2 py-0.5 rounded-full">已废止</span></div><span class="text-xs text-gray-400">2024-06-01</span></div><p class="text-xs text-gray-500">因标准体系更新，该版本正式废止</p></div></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sub: relation-config -->
+        <div id="sub-relation-config" class="sub-section fade-in">
+            <div class="glass-card rounded-2xl p-6">
+                <div class="flex items-center justify-between mb-5"><h3 class="text-sm font-semibold text-gray-700">标准文件关联配置</h3><button class="btn-primary flex items-center gap-2 px-4 py-2 text-xs text-white rounded-xl"><i class="fas fa-plus"></i> 新建关联</button></div>
+                <p class="text-xs text-gray-500 mb-5">将标准文件、实施细则、政策解读、解读视频及常见问题库进行绑定，一站式获取完整信息。</p>
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="border border-gray-100 rounded-xl p-5 hover:shadow-md transition-all cursor-pointer bg-white">
+                        <div class="flex items-center gap-3 mb-3"><div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center"><i class="fas fa-link text-white text-sm"></i></div><div><h4 class="text-sm font-medium text-gray-700">GB/T 42021-2023 关联组</h4><p class="text-[11px] text-gray-400">关联 5 份材料</p></div></div>
+                        <div class="space-y-2"><div class="flex items-center gap-2 text-xs"><span class="w-16 text-gray-400">主文件</span><span class="text-gray-700">分类分级指南</span></div><div class="flex items-center gap-2 text-xs"><span class="w-16 text-gray-400">实施细则</span><div class="flex gap-1"><span class="tag bg-purple-50 text-purple-600 px-2 py-0.5 rounded-full text-[10px]">广东省</span><span class="tag bg-purple-50 text-purple-600 px-2 py-0.5 rounded-full text-[10px]">浙江省</span></div></div><div class="flex items-center gap-2 text-xs"><span class="w-16 text-gray-400">解读视频</span><span class="text-blue-600">2 个视频</span></div><div class="flex items-center gap-2 text-xs"><span class="w-16 text-gray-400">问题库</span><span class="text-amber-600">8 条问题</span></div></div>
+                    </div>
+                    <div class="border border-gray-100 rounded-xl p-5 hover:shadow-md transition-all cursor-pointer bg-white">
+                        <div class="flex items-center gap-3 mb-3"><div class="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center"><i class="fas fa-link text-white text-sm"></i></div><div><h4 class="text-sm font-medium text-gray-700">GB/T 40118-2021 关联组</h4><p class="text-[11px] text-gray-400">关联 4 份材料</p></div></div>
+                        <div class="space-y-2"><div class="flex items-center gap-2 text-xs"><span class="w-16 text-gray-400">主文件</span><span class="text-gray-700">应用实施指南</span></div><div class="flex items-center gap-2 text-xs"><span class="w-16 text-gray-400">实施细则</span><span class="tag bg-purple-50 text-purple-600 px-2 py-0.5 rounded-full text-[10px]">山东省</span></div><div class="flex items-center gap-2 text-xs"><span class="w-16 text-gray-400">政策解读</span><span class="text-blue-600">1 篇图文</span></div><div class="flex items-center gap-2 text-xs"><span class="w-16 text-gray-400">问题库</span><span class="text-amber-600">5 条问题</span></div></div>
+                    </div>
+                    <div class="border border-gray-100 rounded-xl p-5 hover:shadow-md transition-all cursor-pointer bg-white">
+                        <div class="flex items-center gap-3 mb-3"><div class="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center"><i class="fas fa-link text-white text-sm"></i></div><div><h4 class="text-sm font-medium text-gray-700">GB/T 23031.1-2022 关联组</h4><p class="text-[11px] text-gray-400">关联 3 份材料</p></div></div>
+                        <div class="space-y-2"><div class="flex items-center gap-2 text-xs"><span class="w-16 text-gray-400">主文件</span><span class="text-gray-700">企业应用水平与绩效评价</span></div><div class="flex items-center gap-2 text-xs"><span class="w-16 text-gray-400">解读视频</span><span class="text-blue-600">1 个视频</span></div><div class="flex items-center gap-2 text-xs"><span class="w-16 text-gray-400">问题库</span><span class="text-amber-600">6 条问题</span></div></div>
+                    </div>
+                    <div class="border border-dashed border-gray-300 rounded-xl p-5 flex flex-col items-center justify-center text-gray-400 hover:text-blue-500 hover:border-blue-300 transition-all cursor-pointer min-h-[160px]"><i class="fas fa-plus-circle text-2xl mb-2"></i><span class="text-xs">添加新关联组</span></div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ==================== PAGE 2: 标准文件精准检索 ==================== -->
+    <section id="page-file-search" class="page-section fade-in">
+        <div class="mb-6"><h2 class="text-xl font-bold text-gray-800 flex items-center gap-2"><span class="w-1 h-6 bg-emerald-500 rounded-full"></span>标准文件精准检索</h2><p class="text-sm text-gray-500 mt-1 ml-3">多维度组合查询，快速精准定位目标标准文件</p></div>
+        <!-- Search Panel -->
+        <div class="glass-card rounded-2xl p-6 mb-6">
+            <div class="grid grid-cols-12 gap-4 mb-4">
+                <div class="col-span-5"><label class="text-[11px] text-gray-500 mb-1 block">关键词检索</label><div class="search-glow flex items-center gap-2 border border-gray-200 rounded-xl px-4 py-2.5 transition-all bg-white"><i class="fas fa-search text-gray-400"></i><input type="text" id="searchKeyword" placeholder="输入关键词，如 &quot;分类分级&quot; &quot;服务能力评估&quot;..." class="flex-1 text-sm focus:outline-none bg-transparent" onkeyup="if(event.key==='Enter')performSearch()"></div></div>
+                <div class="col-span-2"><label class="text-[11px] text-gray-500 mb-1 block">发布机构</label><select class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-300 bg-white"><option>全部机构</option><option>国家标准化管理委员会</option><option>工业和信息化部</option><option>各省工信厅</option></select></div>
+                <div class="col-span-2"><label class="text-[11px] text-gray-500 mb-1 block">文件类型</label><select class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-300 bg-white"><option>全部类型</option><option>国家标准 (GB/T)</option><option>行业标准 (YD/T)</option><option>地方实施细则</option></select></div>
+                <div class="col-span-2"><label class="text-[11px] text-gray-500 mb-1 block">发布时间</label><select class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-300 bg-white"><option>全部时间</option><option>2024年</option><option>2023年</option><option>2022年</option><option>2021年及更早</option></select></div>
+                <div class="col-span-1 flex items-end"><button class="w-full btn-primary text-white rounded-xl py-2.5 text-sm font-medium" onclick="performSearch()"><i class="fas fa-filter"></i></button></div>
+            </div>
+            <div class="flex items-center gap-2"><span class="text-[11px] text-gray-400">热门：</span>
+                <button class="tag bg-blue-50 text-blue-600 px-3 py-1 rounded-full text-[11px] hover:bg-blue-100" onclick="quickSearch('分类分级')">分类分级</button>
+                <button class="tag bg-blue-50 text-blue-600 px-3 py-1 rounded-full text-[11px] hover:bg-blue-100" onclick="quickSearch('服务能力评估')">服务能力评估</button>
+                <button class="tag bg-blue-50 text-blue-600 px-3 py-1 rounded-full text-[11px] hover:bg-blue-100" onclick="quickSearch('平台基础能力')">平台基础能力</button>
+                <button class="tag bg-blue-50 text-blue-600 px-3 py-1 rounded-full text-[11px] hover:bg-blue-100" onclick="quickSearch('安全防护')">安全防护</button>
+            </div>
+        </div>
+        <!-- Results -->
+        <div class="flex items-center justify-between mb-4"><span class="text-sm text-gray-700 font-medium">检索结果 <span class="text-xs text-gray-400 font-normal">共找到 28 条相关文件</span></span><div class="flex items-center gap-2"><span class="text-xs text-gray-400">排序：</span><select class="text-xs border border-gray-200 rounded-lg px-2 py-1 focus:outline-none bg-white"><option>相关性优先</option><option>最新发布</option><option>浏览量最高</option></select></div></div>
+        <div class="space-y-3" id="searchResultList">
+            <div class="glass-card rounded-xl p-5 cursor-pointer" onclick="togglePreview(this)"><div class="flex items-start justify-between"><div class="flex-1"><div class="flex items-center gap-2 mb-2"><span class="bg-red-50 text-red-600 text-[10px] px-2 py-0.5 rounded-full font-medium">国家标准</span><span class="status-active text-[10px] px-2 py-0.5 rounded-full">生效中</span><span class="text-[10px] text-gray-400 ml-2"><i class="fas fa-star text-amber-400"></i> 相关度 98%</span></div><h4 class="text-sm font-medium text-gray-800 mb-1">GB/T 42021-2023 工业互联网平台 <mark class="bg-yellow-100 text-yellow-800 px-0.5 rounded">分类分级</mark>指南</h4><p class="text-xs text-gray-500 mb-2">明确工业互联网平台分类分级体系架构，规定了平台分类维度、分级标准、评估流程等核心内容...</p><div class="flex items-center gap-4 text-[11px] text-gray-400"><span><i class="fas fa-building mr-1"></i>国家标准化管理委员会</span><span><i class="fas fa-calendar mr-1"></i>2023-01-18</span><span><i class="fas fa-eye mr-1"></i>3,842</span><span><i class="fas fa-link mr-1"></i>关联 5 份</span></div></div><button class="ml-4 flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 whitespace-nowrap border border-blue-200 px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-all"><i class="fas fa-eye"></i> 预览</button></div><div class="preview-panel hidden mt-4 pt-4 border-t border-gray-100"><div class="bg-gray-50 rounded-xl p-4"><h5 class="text-xs font-semibold text-gray-600 mb-3"><i class="fas fa-file-lines mr-1"></i> 核心章节预览</h5><div class="space-y-3 text-xs text-gray-600 leading-relaxed"><div><p class="font-medium text-gray-700 mb-1">第一章 总则</p><p>1.1 为规范工业互联网平台分类分级工作，促进平台健康有序发展，制定本指南。</p></div><div><p class="font-medium text-gray-700 mb-1">第三章 分类体系</p><p>3.1 平台分类维度包括：a) 按服务领域分为通用型和行业型；b) 按功能定位分为资源管理型、协同制造型、分析优化型。</p></div><div><p class="font-medium text-gray-700 mb-1">第五章 分级标准</p><p>5.1 平台能力分级分为基础级、增强级、先进级三个层级，依据平台基础能力、服务能力、生态能力等维度进行综合评估。</p></div></div></div></div></div>
+            <div class="glass-card rounded-xl p-5 cursor-pointer" onclick="togglePreview(this)"><div class="flex items-start justify-between"><div class="flex-1"><div class="flex items-center gap-2 mb-2"><span class="bg-red-50 text-red-600 text-[10px] px-2 py-0.5 rounded-full font-medium">国家标准</span><span class="status-active text-[10px] px-2 py-0.5 rounded-full">生效中</span><span class="text-[10px] text-gray-400 ml-2"><i class="fas fa-star text-amber-400"></i> 相关度 92%</span></div><h4 class="text-sm font-medium text-gray-800 mb-1">GB/T 40118-2021 工业互联网平台 应用实施指南</h4><p class="text-xs text-gray-500 mb-2">规定工业互联网平台应用实施的总体要求、实施流程、<mark class="bg-yellow-100 text-yellow-800 px-0.5 rounded">服务能力评估</mark>方法及保障措施...</p><div class="flex items-center gap-4 text-[11px] text-gray-400"><span><i class="fas fa-building mr-1"></i>工业和信息化部</span><span><i class="fas fa-calendar mr-1"></i>2021-08-20</span><span><i class="fas fa-eye mr-1"></i>5,126</span></div></div><button class="ml-4 flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 whitespace-nowrap border border-blue-200 px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-all"><i class="fas fa-eye"></i> 预览</button></div><div class="preview-panel hidden mt-4 pt-4 border-t border-gray-100"><div class="bg-gray-50 rounded-xl p-4"><h5 class="text-xs font-semibold text-gray-600 mb-3"><i class="fas fa-file-lines mr-1"></i> 核心章节预览</h5><div class="text-xs text-gray-600 leading-relaxed"><p class="font-medium text-gray-700 mb-1">第四章 服务能力评估</p><p>4.1 平台服务能力评估包含：设备接入能力、数据管理能力、应用开发能力、安全保障能力等。</p></div></div></div></div>
+            <div class="glass-card rounded-xl p-5 cursor-pointer" onclick="togglePreview(this)"><div class="flex items-start justify-between"><div class="flex-1"><div class="flex items-center gap-2 mb-2"><span class="bg-purple-50 text-purple-600 text-[10px] px-2 py-0.5 rounded-full font-medium">地方标准</span><span class="status-active text-[10px] px-2 py-0.5 rounded-full">生效中</span><span class="text-[10px] text-gray-400 ml-2"><i class="fas fa-star text-amber-400"></i> 相关度 85%</span></div><h4 class="text-sm font-medium text-gray-800 mb-1">粤工信互联网〔2023〕45号 广东省实施细则</h4><p class="text-xs text-gray-500 mb-2">结合广东省实际，细化国家分类分级标准的实施路径和评估要求...</p><div class="flex items-center gap-4 text-[11px] text-gray-400"><span><i class="fas fa-building mr-1"></i>广东省工信厅</span><span><i class="fas fa-calendar mr-1"></i>2023-06-10</span><span><i class="fas fa-eye mr-1"></i>2,103</span></div></div><button class="ml-4 flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 whitespace-nowrap border border-blue-200 px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-all"><i class="fas fa-eye"></i> 预览</button></div><div class="preview-panel hidden mt-4 pt-4 border-t border-gray-100"><div class="bg-gray-50 rounded-xl p-4"><h5 class="text-xs font-semibold text-gray-600 mb-3"><i class="fas fa-file-lines mr-1"></i> 核心章节预览</h5><div class="text-xs text-gray-600 leading-relaxed"><p class="font-medium text-gray-700 mb-1">第二章 适用范围</p><p>本细则适用于广东省辖区内注册运营的各类工业互联网平台企业。</p></div></div></div></div>
+            <div class="glass-card rounded-xl p-5 cursor-pointer" onclick="togglePreview(this)"><div class="flex items-start justify-between"><div class="flex-1"><div class="flex items-center gap-2 mb-2"><span class="bg-amber-50 text-amber-600 text-[10px] px-2 py-0.5 rounded-full font-medium">行业标准</span><span class="status-active text-[10px] px-2 py-0.5 rounded-full">生效中</span><span class="text-[10px] text-gray-400 ml-2"><i class="fas fa-star text-amber-400"></i> 相关度 78%</span></div><h4 class="text-sm font-medium text-gray-800 mb-1">YD/T 3981-2021 工业互联网平台 接口模型与通用要求</h4><p class="text-xs text-gray-500 mb-2">规定了工业互联网平台接口的分类、数据模型、通信协议及互操作性要求...</p><div class="flex items-center gap-4 text-[11px] text-gray-400"><span><i class="fas fa-building mr-1"></i>中国通信标准化协会</span><span><i class="fas fa-calendar mr-1"></i>2021-12-01</span><span><i class="fas fa-eye mr-1"></i>1,847</span></div></div><button class="ml-4 flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 whitespace-nowrap border border-blue-200 px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-all"><i class="fas fa-eye"></i> 预览</button></div><div class="preview-panel hidden mt-4 pt-4 border-t border-gray-100"><div class="bg-gray-50 rounded-xl p-4"><h5 class="text-xs font-semibold text-gray-600 mb-3"><i class="fas fa-file-lines mr-1"></i> 核心章节预览</h5><div class="text-xs text-gray-600 leading-relaxed"><p class="font-medium text-gray-700 mb-1">第三章 接口分类</p><p>3.1 平台接口分为设备接入接口、数据服务接口、应用开发接口、运维管理接口四大类。</p></div></div></div></div>
+        </div>
+        <div class="flex items-center justify-between mt-6"><span class="text-xs text-gray-400">显示 1-4 / 共 28 条</span><div class="flex items-center gap-1"><button class="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center text-gray-400 hover:bg-gray-50 text-xs"><i class="fas fa-chevron-left"></i></button><button class="w-8 h-8 rounded-lg bg-blue-500 text-white flex items-center justify-center text-xs font-medium">1</button><button class="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50 text-xs">2</button><button class="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50 text-xs">3</button><span class="text-gray-400 text-xs px-1">...</span><button class="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50 text-xs">7</button><button class="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center text-gray-400 hover:bg-gray-50 text-xs"><i class="fas fa-chevron-right"></i></button></div></div>
+    </section>
+
+    <!-- ==================== PAGE 3: 标准解读服务 ==================== -->
+    <section id="page-interpret" class="page-section fade-in">
+        <div class="mb-6"><h2 class="text-xl font-bold text-gray-800 flex items-center gap-2"><span class="w-1 h-6 bg-purple-500 rounded-full"></span>标准解读服务</h2><p class="text-sm text-gray-500 mt-1 ml-3">多形式解读内容呈现，助力用户深度理解标准要求</p></div>
+        <div class="flex items-center gap-1 mb-6 border-b border-gray-200">
+            <button class="tab-item active px-5 py-3 text-sm text-gray-600" onclick="switchInterpretTab('video',this)"><i class="fas fa-video mr-1.5"></i>视频解读</button>
+            <button class="tab-item px-5 py-3 text-sm text-gray-600" onclick="switchInterpretTab('article',this)"><i class="fas fa-newspaper mr-1.5"></i>图文解读</button>
+            <button class="tab-item px-5 py-3 text-sm text-gray-600" onclick="switchInterpretTab('related',this)"><i class="fas fa-diagram-project mr-1.5"></i>关联匹配</button>
+        </div>
+
+        <!-- Video Tab -->
+        <div id="tab-video" class="interpret-content active fade-in">
+            <div class="flex items-center justify-between mb-5"><span class="text-sm text-gray-700">共 <strong>24</strong> 个解读视频</span><button class="btn-primary flex items-center gap-2 px-4 py-2 text-xs text-white rounded-xl" onclick="openModal('videoUploadModal')"><i class="fas fa-upload"></i> 上传视频</button></div>
+            <div class="grid grid-cols-3 gap-5">
+                <div class="video-card glass-card rounded-2xl overflow-hidden cursor-pointer" onclick="openModal('videoPlayerModal')"><div class="relative h-40 bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center"><div class="play-btn w-14 h-14 rounded-full bg-white/30 backdrop-blur-sm flex items-center justify-center"><i class="fas fa-play text-white text-lg ml-1"></i></div><div class="absolute bottom-2 right-2 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded-md">08:32</div><div class="absolute top-2 left-2 bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded-md">专家解读</div></div><div class="p-4"><h4 class="text-sm font-medium text-gray-800 mb-1">平台分类分级标准核心条款深度解读</h4><p class="text-xs text-gray-500 mb-3">深入解析分类分级标准的核心要求与实施要点</p><div class="flex items-center justify-between"><div class="flex items-center gap-2"><div class="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center"><i class="fas fa-user text-blue-500 text-[8px]"></i></div><span class="text-[11px] text-gray-500">张教授 | 行业专家</span></div><span class="text-[11px] text-gray-400"><i class="fas fa-eye mr-1"></i>2,341</span></div><div class="mt-2 flex gap-1"><span class="tag bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full text-[10px]">分类分级</span><span class="tag bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full text-[10px]">GB/T 42021</span></div></div></div>
+                <div class="video-card glass-card rounded-2xl overflow-hidden cursor-pointer" onclick="openModal('videoPlayerModal')"><div class="relative h-40 bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center"><div class="play-btn w-14 h-14 rounded-full bg-white/30 backdrop-blur-sm flex items-center justify-center"><i class="fas fa-play text-white text-lg ml-1"></i></div><div class="absolute bottom-2 right-2 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded-md">06:15</div><div class="absolute top-2 left-2 bg-emerald-600 text-white text-[10px] px-2 py-0.5 rounded-md">政策解析</div></div><div class="p-4"><h4 class="text-sm font-medium text-gray-800 mb-1">服务能力评估指标体系详解与实践</h4><p class="text-xs text-gray-500 mb-3">结合企业案例深入讲解评估指标的计算方法</p><div class="flex items-center justify-between"><div class="flex items-center gap-2"><div class="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center"><i class="fas fa-user text-emerald-500 text-[8px]"></i></div><span class="text-[11px] text-gray-500">李研究员 | 信通院</span></div><span class="text-[11px] text-gray-400"><i class="fas fa-eye mr-1"></i>1,892</span></div><div class="mt-2 flex gap-1"><span class="tag bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full text-[10px]">服务能力</span><span class="tag bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full text-[10px]">GB/T 40118</span></div></div></div>
+                <div class="video-card glass-card rounded-2xl overflow-hidden cursor-pointer" onclick="openModal('videoPlayerModal')"><div class="relative h-40 bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center"><div class="play-btn w-14 h-14 rounded-full bg-white/30 backdrop-blur-sm flex items-center justify-center"><i class="fas fa-play text-white text-lg ml-1"></i></div><div class="absolute bottom-2 right-2 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded-md">09:48</div><div class="absolute top-2 left-2 bg-amber-600 text-white text-[10px] px-2 py-0.5 rounded-md">实施指导</div></div><div class="p-4"><h4 class="text-sm font-medium text-gray-800 mb-1">地方实施细则编制要点与最佳实践</h4><p class="text-xs text-gray-500 mb-3">各地实施细则编制经验总结与实施要点</p><div class="flex items-center justify-between"><div class="flex items-center gap-2"><div class="w-5 h-5 rounded-full bg-amber-100 flex items-center justify-center"><i class="fas fa-user text-amber-500 text-[8px]"></i></div><span class="text-[11px] text-gray-500">王主任 | 广东省工信厅</span></div><span class="text-[11px] text-gray-400"><i class="fas fa-eye mr-1"></i>1,567</span></div><div class="mt-2 flex gap-1"><span class="tag bg-amber-50 text-amber-600 px-2 py-0.5 rounded-full text-[10px]">实施细则</span><span class="tag bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full text-[10px]">地方标准</span></div></div></div>
+                <div class="video-card glass-card rounded-2xl overflow-hidden cursor-pointer" onclick="openModal('videoPlayerModal')"><div class="relative h-40 bg-gradient-to-br from-pink-400 to-rose-500 flex items-center justify-center"><div class="play-btn w-14 h-14 rounded-full bg-white/30 backdrop-blur-sm flex items-center justify-center"><i class="fas fa-play text-white text-lg ml-1"></i></div><div class="absolute bottom-2 right-2 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded-md">07:22</div><div class="absolute top-2 left-2 bg-pink-600 text-white text-[10px] px-2 py-0.5 rounded-md">案例分析</div></div><div class="p-4"><h4 class="text-sm font-medium text-gray-800 mb-1">某头部平台如何满足"平台基础能力"要求</h4><p class="text-xs text-gray-500 mb-3">以真实平台为例详解基础能力评估达标路径</p><div class="flex items-center justify-between"><div class="flex items-center gap-2"><div class="w-5 h-5 rounded-full bg-pink-100 flex items-center justify-center"><i class="fas fa-user text-pink-500 text-[8px]"></i></div><span class="text-[11px] text-gray-500">赵总监 | 龙头企业</span></div><span class="text-[11px] text-gray-400"><i class="fas fa-eye mr-1"></i>3,214</span></div><div class="mt-2 flex gap-1"><span class="tag bg-pink-50 text-pink-600 px-2 py-0.5 rounded-full text-[10px]">基础能力</span><span class="tag bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full text-[10px]">案例</span></div></div></div>
+                <div class="video-card glass-card rounded-2xl overflow-hidden cursor-pointer" onclick="openModal('videoPlayerModal')"><div class="relative h-40 bg-gradient-to-br from-indigo-400 to-blue-600 flex items-center justify-center"><div class="play-btn w-14 h-14 rounded-full bg-white/30 backdrop-blur-sm flex items-center justify-center"><i class="fas fa-play text-white text-lg ml-1"></i></div><div class="absolute bottom-2 right-2 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded-md">05:56</div><div class="absolute top-2 left-2 bg-indigo-600 text-white text-[10px] px-2 py-0.5 rounded-md">标准对比</div></div><div class="p-4"><h4 class="text-sm font-medium text-gray-800 mb-1">2023版与2021版核心差异深度解读</h4><p class="text-xs text-gray-500 mb-3">逐条对比新旧标准，掌握重大变更点</p><div class="flex items-center justify-between"><div class="flex items-center gap-2"><div class="w-5 h-5 rounded-full bg-indigo-100 flex items-center justify-center"><i class="fas fa-user text-indigo-500 text-[8px]"></i></div><span class="text-[11px] text-gray-500">陈研究员 | 标准研究院</span></div><span class="text-[11px] text-gray-400"><i class="fas fa-eye mr-1"></i>2,078</span></div><div class="mt-2 flex gap-1"><span class="tag bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full text-[10px]">标准对比</span><span class="tag bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full text-[10px]">GB/T 42021</span></div></div></div>
+                <div class="video-card glass-card rounded-2xl overflow-hidden cursor-pointer" onclick="openModal('videoPlayerModal')"><div class="relative h-40 bg-gradient-to-br from-cyan-400 to-sky-500 flex items-center justify-center"><div class="play-btn w-14 h-14 rounded-full bg-white/30 backdrop-blur-sm flex items-center justify-center"><i class="fas fa-play text-white text-lg ml-1"></i></div><div class="absolute bottom-2 right-2 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded-md">10:00</div><div class="absolute top-2 left-2 bg-cyan-600 text-white text-[10px] px-2 py-0.5 rounded-md">安全专题</div></div><div class="p-4"><h4 class="text-sm font-medium text-gray-800 mb-1">工业互联网平台安全防护标准要点解析</h4><p class="text-xs text-gray-500 mb-3">从安全角度解读平台安全等级和防护要求</p><div class="flex items-center justify-between"><div class="flex items-center gap-2"><div class="w-5 h-5 rounded-full bg-cyan-100 flex items-center justify-center"><i class="fas fa-user text-cyan-500 text-[8px]"></i></div><span class="text-[11px] text-gray-500">刘工程师 | 安全中心</span></div><span class="text-[11px] text-gray-400"><i class="fas fa-eye mr-1"></i>1,452</span></div><div class="mt-2 flex gap-1"><span class="tag bg-cyan-50 text-cyan-600 px-2 py-0.5 rounded-full text-[10px]">安全防护</span><span class="tag bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full text-[10px]">GB/T 37024</span></div></div></div>
+            </div>
+        </div>
+
+        <!-- Article Tab -->
+        <div id="tab-article" class="interpret-content fade-in">
+            <div class="flex items-center justify-between mb-5"><span class="text-sm text-gray-700">共 <strong>18</strong> 篇图文解读</span><button class="btn-primary flex items-center gap-2 px-4 py-2 text-xs text-white rounded-xl"><i class="fas fa-pen-to-square"></i> 发布解读</button></div>
+            <div class="space-y-4">
+                <div class="glass-card rounded-xl p-5 cursor-pointer" onclick="toggleArticle(this)"><div class="flex items-center gap-2 mb-3"><span class="bg-blue-50 text-blue-600 text-[10px] px-2 py-0.5 rounded-full">条款解读</span><span class="text-[10px] text-gray-400">关联标准：GB/T 42021-2023</span></div><h4 class="text-base font-medium text-gray-800 mb-2">"平台服务能力评估指标"条款原文与深度解读</h4><p class="text-sm text-gray-500 mb-3">本文对第5.3条款进行逐条解析，结合某头部平台实际评估案例...</p><div class="article-detail hidden mt-4 pt-4 border-t border-gray-100"><div class="space-y-4"><div class="bg-gray-50 rounded-xl p-4"><h5 class="text-xs font-bold text-blue-700 mb-2">条款原文</h5><p class="text-xs text-gray-600 leading-relaxed italic">"5.3 平台服务能力评估应涵盖：设备接入规模及协议覆盖率、数据采集处理能力及实时性、应用开发工具丰富度与开发者活跃度、安全防护等级及事件响应能力。"</p></div><div class="bg-blue-50/50 rounded-xl p-4"><h5 class="text-xs font-bold text-blue-700 mb-2">解读说明</h5><p class="text-xs text-gray-600 leading-relaxed">该条款明确了评估四大核心维度。"设备接入规模"要求统计已接入设备总量并支持主流工业协议（OPC UA、MQTT、Modbus）。"数据采集处理能力"关注数据从边缘到云端的全链路时延...</p></div><div class="bg-emerald-50/50 rounded-xl p-4"><h5 class="text-xs font-bold text-emerald-700 mb-2">案例分析</h5><p class="text-xs text-gray-600 leading-relaxed">某智能制造平台：已接入超200万台工业设备，支持12种协议，数据采集延时<50ms，开发者社区10万+用户。按5.3条款评估达到"先进级"标准。</p></div></div></div><div class="flex items-center justify-between mt-3"><div class="flex items-center gap-4 text-[11px] text-gray-400"><span><i class="fas fa-user mr-1"></i>标准研究团队</span><span><i class="fas fa-calendar mr-1"></i>2024-03-12</span><span><i class="fas fa-eye mr-1"></i>4,521</span></div><button class="text-xs text-blue-600"><i class="fas fa-chevron-down mr-1"></i>展开</button></div></div>
+                <div class="glass-card rounded-xl p-5 cursor-pointer" onclick="toggleArticle(this)"><div class="flex items-center gap-2 mb-3"><span class="bg-emerald-50 text-emerald-600 text-[10px] px-2 py-0.5 rounded-full">实施指导</span><span class="text-[10px] text-gray-400">关联标准：GB/T 40118-2021</span></div><h4 class="text-base font-medium text-gray-800 mb-2">企业申报分级评定全流程指南</h4><p class="text-sm text-gray-500 mb-3">完整梳理从准备申报材料到通过评定的每个环节，附申报清单模板...</p><div class="article-detail hidden mt-4 pt-4 border-t border-gray-100"><div class="space-y-4"><div class="bg-gray-50 rounded-xl p-4"><h5 class="text-xs font-bold text-emerald-700 mb-2">条款原文</h5><p class="text-xs text-gray-600 leading-relaxed italic">"6.2 申报流程：企业自评 -> 材料提交 -> 专家评审 -> 结果公示 -> 证书颁发。"</p></div><div class="bg-blue-50/50 rounded-xl p-4"><h5 class="text-xs font-bold text-blue-700 mb-2">解读说明</h5><p class="text-xs text-gray-600 leading-relaxed">准备"服务案例证明"时建议选取3-5个典型案例，每个案例需包含：客户背景、问题描述、平台方案、实施效果和量化数据。</p></div></div></div><div class="flex items-center justify-between mt-3"><div class="flex items-center gap-4 text-[11px] text-gray-400"><span><i class="fas fa-user mr-1"></i>申报指导小组</span><span><i class="fas fa-calendar mr-1"></i>2024-02-28</span><span><i class="fas fa-eye mr-1"></i>6,734</span></div><button class="text-xs text-blue-600"><i class="fas fa-chevron-down mr-1"></i>展开</button></div></div>
+                <div class="glass-card rounded-xl p-5 cursor-pointer" onclick="toggleArticle(this)"><div class="flex items-center gap-2 mb-3"><span class="bg-purple-50 text-purple-600 text-[10px] px-2 py-0.5 rounded-full">对比分析</span><span class="text-[10px] text-gray-400">多标准对比</span></div><h4 class="text-base font-medium text-gray-800 mb-2">国家标准与各地实施细则差异化要求对照</h4><p class="text-sm text-gray-500 mb-3">对比广东、浙江、山东三省实施细则与国家标准的差异化要求...</p><div class="article-detail hidden mt-4 pt-4 border-t border-gray-100"><div class="bg-gray-50 rounded-xl p-4"><table class="w-full text-xs"><thead><tr class="text-gray-500"><th class="text-left py-2 px-2">维度</th><th class="text-left py-2 px-2">国家标准</th><th class="text-left py-2 px-2">广东省</th><th class="text-left py-2 px-2">浙江省</th></tr></thead><tbody class="text-gray-600"><tr class="border-t border-gray-200"><td class="py-2 px-2 font-medium">评估周期</td><td class="py-2 px-2">年度</td><td class="py-2 px-2">半年度</td><td class="py-2 px-2">年度</td></tr><tr class="border-t border-gray-200"><td class="py-2 px-2 font-medium">附加要求</td><td class="py-2 px-2">-</td><td class="py-2 px-2">粤港澳互通</td><td class="py-2 px-2">数字经济指标</td></tr><tr class="border-t border-gray-200"><td class="py-2 px-2 font-medium">扶持政策</td><td class="py-2 px-2">-</td><td class="py-2 px-2">最高500万补贴</td><td class="py-2 px-2">税收优惠</td></tr></tbody></table></div></div><div class="flex items-center justify-between mt-3"><div class="flex items-center gap-4 text-[11px] text-gray-400"><span><i class="fas fa-user mr-1"></i>政策研究组</span><span><i class="fas fa-calendar mr-1"></i>2024-01-20</span><span><i class="fas fa-eye mr-1"></i>3,891</span></div><button class="text-xs text-blue-600"><i class="fas fa-chevron-down mr-1"></i>展开</button></div></div>
+            </div>
+        </div>
+
+        <!-- Related Matching Tab -->
+        <div id="tab-related" class="interpret-content fade-in">
+            <p class="text-sm text-gray-500 mb-5">选择标准条款，查看自动推荐的关联解读内容</p>
+            <div class="grid grid-cols-12 gap-6">
+                <div class="col-span-4">
+                    <div class="glass-card rounded-2xl p-5">
+                        <h4 class="text-sm font-semibold text-gray-700 mb-4">标准条款列表</h4>
+                        <div class="space-y-2">
+                            <div class="clause-item selected p-3 rounded-xl border-2 border-blue-200 bg-blue-50/50 cursor-pointer" onclick="selectClause(this)"><div class="text-xs font-medium text-blue-700 mb-1">GB/T 42021-2023 | 第5.3条</div><p class="text-xs text-gray-600">平台服务能力评估指标</p></div>
+                            <div class="clause-item p-3 rounded-xl border border-gray-200 hover:border-blue-200 hover:bg-blue-50/30 cursor-pointer transition-all" onclick="selectClause(this)"><div class="text-xs font-medium text-gray-600 mb-1">GB/T 42021-2023 | 第3.1条</div><p class="text-xs text-gray-500">平台分类维度定义</p></div>
+                            <div class="clause-item p-3 rounded-xl border border-gray-200 hover:border-blue-200 hover:bg-blue-50/30 cursor-pointer transition-all" onclick="selectClause(this)"><div class="text-xs font-medium text-gray-600 mb-1">GB/T 40118-2021 | 第6.2条</div><p class="text-xs text-gray-500">申报评定流程</p></div>
+                            <div class="clause-item p-3 rounded-xl border border-gray-200 hover:border-blue-200 hover:bg-blue-50/30 cursor-pointer transition-all" onclick="selectClause(this)"><div class="text-xs font-medium text-gray-600 mb-1">GB/T 41870-2022 | 第4.1条</div><p class="text-xs text-gray-500">平台通用技术要求</p></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-span-8">
+                    <div class="glass-card rounded-2xl p-5">
+                        <div class="flex items-center gap-2 mb-4"><i class="fas fa-wand-magic-sparkles text-purple-500"></i><h4 class="text-sm font-semibold text-gray-700">关联推荐内容</h4><span class="text-[10px] bg-purple-50 text-purple-600 px-2 py-0.5 rounded-full">智能匹配</span></div>
+                        <div class="space-y-4">
+                            <div class="border border-gray-100 rounded-xl p-4 hover:shadow-md transition-all bg-white">
+                                <div class="flex items-center gap-2 mb-2"><i class="fas fa-video text-blue-500"></i><span class="text-xs font-medium text-gray-700">解读视频</span></div>
+                                <h5 class="text-sm text-gray-800 mb-1">平台服务能力评估指标体系详解</h5>
+                                <p class="text-xs text-gray-500 mb-2">专家针对5.3条款逐项解读，含动画演示评估计算方法</p>
+                                <div class="flex items-center gap-3 text-[11px] text-gray-400"><span>时长 06:15</span><span>|</span><span>李研究员</span><span>|</span><span class="text-blue-600 cursor-pointer hover:underline">立即观看</span></div>
+                            </div>
+                            <div class="border border-gray-100 rounded-xl p-4 hover:shadow-md transition-all bg-white">
+                                <div class="flex items-center gap-2 mb-2"><i class="fas fa-newspaper text-emerald-500"></i><span class="text-xs font-medium text-gray-700">图文解读</span></div>
+                                <h5 class="text-sm text-gray-800 mb-1">"平台服务能力评估指标"条款原文与深度解读</h5>
+                                <p class="text-xs text-gray-500 mb-2">条款原文 + 解读说明 + 某头部平台案例分析</p>
+                                <div class="flex items-center gap-3 text-[11px] text-gray-400"><span>4,521次阅读</span><span>|</span><span>标准研究团队</span><span>|</span><span class="text-blue-600 cursor-pointer hover:underline">查看全文</span></div>
+                            </div>
+                            <div class="border border-gray-100 rounded-xl p-4 hover:shadow-md transition-all bg-white">
+                                <div class="flex items-center gap-2 mb-2"><i class="fas fa-circle-question text-amber-500"></i><span class="text-xs font-medium text-gray-700">相关问题</span></div>
+                                <div class="space-y-2 text-xs"><div class="flex items-center gap-2 text-gray-600 hover:text-blue-600 cursor-pointer"><i class="fas fa-chevron-right text-[8px] text-gray-300"></i>"平台基础能力"具体包含哪些指标？</div><div class="flex items-center gap-2 text-gray-600 hover:text-blue-600 cursor-pointer"><i class="fas fa-chevron-right text-[8px] text-gray-300"></i>自评估报告中定量指标如何计算？</div><div class="flex items-center gap-2 text-gray-600 hover:text-blue-600 cursor-pointer"><i class="fas fa-chevron-right text-[8px] text-gray-300"></i>申报材料中"服务案例证明"需提供哪些内容？</div></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ==================== PAGE 4: 常见问题库 ==================== -->
+    <section id="page-faq" class="page-section fade-in">
+        <div class="mb-6 flex items-center justify-between"><div><h2 class="text-xl font-bold text-gray-800 flex items-center gap-2"><span class="w-1 h-6 bg-amber-500 rounded-full"></span>常见问题库</h2><p class="text-sm text-gray-500 mt-1 ml-3">按类别分类归集，覆盖标准学习、申报准备、评估过程等高频疑问</p></div><button class="btn-primary flex items-center gap-2 px-4 py-2 text-sm text-white rounded-xl"><i class="fas fa-plus"></i> 提交新问题</button></div>
+        <!-- Category Tabs -->
+        <div class="flex items-center gap-3 mb-6">
+            <button class="faq-cat-btn px-4 py-2 rounded-xl text-sm font-medium bg-amber-500 text-white shadow-md transition-all" onclick="switchFaqCat(this,'all')">全部问题 <span class="text-[10px] ml-1 opacity-80">42</span></button>
+            <button class="faq-cat-btn px-4 py-2 rounded-xl text-sm font-medium bg-white text-gray-600 border border-gray-200 hover:bg-gray-50 transition-all" onclick="switchFaqCat(this,'understand')">标准理解类 <span class="text-[10px] ml-1 opacity-60">12</span></button>
+            <button class="faq-cat-btn px-4 py-2 rounded-xl text-sm font-medium bg-white text-gray-600 border border-gray-200 hover:bg-gray-50 transition-all" onclick="switchFaqCat(this,'apply')">申报操作类 <span class="text-[10px] ml-1 opacity-60">10</span></button>
+            <button class="faq-cat-btn px-4 py-2 rounded-xl text-sm font-medium bg-white text-gray-600 border border-gray-200 hover:bg-gray-50 transition-all" onclick="switchFaqCat(this,'evaluate')">评估执行类 <span class="text-[10px] ml-1 opacity-60">11</span></button>
+            <button class="faq-cat-btn px-4 py-2 rounded-xl text-sm font-medium bg-white text-gray-600 border border-gray-200 hover:bg-gray-50 transition-all" onclick="switchFaqCat(this,'usage')">使用帮助类 <span class="text-[10px] ml-1 opacity-60">9</span></button>
+        </div>
+        <!-- FAQ Search -->
+        <div class="glass-card rounded-2xl p-4 mb-6">
+            <div class="search-glow flex items-center gap-2 border border-gray-200 rounded-xl px-4 py-2.5 transition-all bg-white"><i class="fas fa-search text-gray-400"></i><input type="text" placeholder="搜索常见问题..." class="flex-1 text-sm focus:outline-none bg-transparent"></div>
+        </div>
+        <!-- FAQ List -->
+        <div class="space-y-3">
+            <div class="glass-card rounded-xl overflow-hidden">
+                <div class="faq-item px-5 py-4 cursor-pointer flex items-center justify-between" onclick="toggleFaq(this)">
+                    <div class="flex items-center gap-3"><span class="bg-blue-50 text-blue-600 text-[10px] px-2 py-0.5 rounded-full font-medium whitespace-nowrap">标准理解类</span><span class="text-sm text-gray-800">分类分级标准中"平台基础能力"具体包含哪些指标？</span></div>
+                    <i class="fas fa-chevron-down text-gray-400 text-xs transition-transform duration-200"></i>
+                </div>
+                <div class="faq-answer" style="max-height:0;opacity:0;overflow:hidden;padding:0 20px">
+                    <div class="pb-4">
+                        <div class="mb-3"><h5 class="text-xs font-semibold text-gray-600 mb-2">解答要点</h5><p class="text-xs text-gray-600 leading-relaxed">根据GB/T 42021-2023第4.2条，"平台基础能力"包含以下核心指标：<br>1. 设备接入能力：支持的工业协议种类、最大并发接入设备数<br>2. 数据管理能力：数据采集频率、存储容量、处理时延<br>3. 计算资源能力：弹性计算资源规模、资源利用率<br>4. 网络通信能力：通信延迟、带宽保障、可靠性指标</p></div>
+                        <div class="flex items-center gap-4 text-[11px]"><span class="text-gray-400"><i class="fas fa-link mr-1"></i>关联标准：<a class="text-blue-600 hover:underline cursor-pointer">GB/T 42021-2023 第4.2条</a></span><span class="text-gray-400"><i class="fas fa-video mr-1"></i><a class="text-blue-600 hover:underline cursor-pointer">查看解读视频</a></span></div>
+                    </div>
+                </div>
+            </div>
+            <div class="glass-card rounded-xl overflow-hidden">
+                <div class="faq-item px-5 py-4 cursor-pointer flex items-center justify-between" onclick="toggleFaq(this)">
+                    <div class="flex items-center gap-3"><span class="bg-emerald-50 text-emerald-600 text-[10px] px-2 py-0.5 rounded-full font-medium whitespace-nowrap">申报操作类</span><span class="text-sm text-gray-800">申报材料中"服务案例证明"需提供哪些内容？</span></div>
+                    <i class="fas fa-chevron-down text-gray-400 text-xs transition-transform duration-200"></i>
+                </div>
+                <div class="faq-answer" style="max-height:0;opacity:0;overflow:hidden;padding:0 20px">
+                    <div class="pb-4">
+                        <div class="mb-3"><h5 class="text-xs font-semibold text-gray-600 mb-2">解答要点</h5><p class="text-xs text-gray-600 leading-relaxed">"服务案例证明"需包含以下内容：<br>1. 客户企业基本信息（名称、行业、规模）<br>2. 项目背景与业务痛点描述<br>3. 平台解决方案详细说明<br>4. 实施成果与量化数据（如效率提升比例、成本降低金额）<br>5. 客户签章确认函<br>建议提供3-5个不同行业的典型案例，案例时间跨度不超过2年。</p></div>
+                        <div class="flex items-center gap-4 text-[11px]"><span class="text-gray-400"><i class="fas fa-link mr-1"></i>关联标准：<a class="text-blue-600 hover:underline cursor-pointer">GB/T 40118-2021 第6.2条</a></span><span class="text-gray-400"><i class="fas fa-newspaper mr-1"></i><a class="text-blue-600 hover:underline cursor-pointer">查看图文指南</a></span></div>
+                    </div>
+                </div>
+            </div>
+            <div class="glass-card rounded-xl overflow-hidden">
+                <div class="faq-item px-5 py-4 cursor-pointer flex items-center justify-between" onclick="toggleFaq(this)">
+                    <div class="flex items-center gap-3"><span class="bg-purple-50 text-purple-600 text-[10px] px-2 py-0.5 rounded-full font-medium whitespace-nowrap">评估执行类</span><span class="text-sm text-gray-800">自评估报告中的定量指标如何计算？</span></div>
+                    <i class="fas fa-chevron-down text-gray-400 text-xs transition-transform duration-200"></i>
+                </div>
+                <div class="faq-answer" style="max-height:0;opacity:0;overflow:hidden;padding:0 20px">
+                    <div class="pb-4">
+                        <div class="mb-3"><h5 class="text-xs font-semibold text-gray-600 mb-2">解答要点</h5><p class="text-xs text-gray-600 leading-relaxed">定量指标计算方法：<br>1. 设备接入率 = 已接入设备数 / 目标设备总数 x 100%<br>2. 数据处理时延 = 数据从采集点到平台可用的平均时间<br>3. 应用开发效率 = 标准化应用交付周期 / 传统开发周期<br>4. 安全事件响应时间 = 安全事件检测到响应完成的平均时间<br>数据采集周期建议选取近6个月的连续运行数据作为基准。</p></div>
+                        <div class="flex items-center gap-4 text-[11px]"><span class="text-gray-400"><i class="fas fa-link mr-1"></i>关联标准：<a class="text-blue-600 hover:underline cursor-pointer">GB/T 42021-2023 第5.3条</a></span></div>
+                    </div>
+                </div>
+            </div>
+            <div class="glass-card rounded-xl overflow-hidden">
+                <div class="faq-item px-5 py-4 cursor-pointer flex items-center justify-between" onclick="toggleFaq(this)">
+                    <div class="flex items-center gap-3"><span class="bg-amber-50 text-amber-600 text-[10px] px-2 py-0.5 rounded-full font-medium whitespace-nowrap">使用帮助类</span><span class="text-sm text-gray-800">如何查询特定标准的解读视频？</span></div>
+                    <i class="fas fa-chevron-down text-gray-400 text-xs transition-transform duration-200"></i>
+                </div>
+                <div class="faq-answer" style="max-height:0;opacity:0;overflow:hidden;padding:0 20px">
+                    <div class="pb-4">
+                        <div class="mb-3"><h5 class="text-xs font-semibold text-gray-600 mb-2">解答要点</h5><p class="text-xs text-gray-600 leading-relaxed">查询解读视频有以下几种方式：<br>1. 通过左侧导航进入"标准解读服务"模块，在"视频解读"标签页中按标准分类筛选<br>2. 使用顶部全局搜索框输入标准编号或关键词<br>3. 在"标准文件分类存储"中找到目标文件后，通过"关联配置"查看已绑定的解读视频<br>4. 在"关联匹配"功能中选择具体条款，自动推荐对应解读视频</p></div>
+                        <div class="flex items-center gap-4 text-[11px]"><span class="text-gray-400"><i class="fas fa-play-circle mr-1"></i><a class="text-blue-600 hover:underline cursor-pointer">前往视频解读</a></span></div>
+                    </div>
+                </div>
+            </div>
+            <div class="glass-card rounded-xl overflow-hidden">
+                <div class="faq-item px-5 py-4 cursor-pointer flex items-center justify-between" onclick="toggleFaq(this)">
+                    <div class="flex items-center gap-3"><span class="bg-blue-50 text-blue-600 text-[10px] px-2 py-0.5 rounded-full font-medium whitespace-nowrap">标准理解类</span><span class="text-sm text-gray-800">"分类分级"的具体含义和适用范围是什么？</span></div>
+                    <i class="fas fa-chevron-down text-gray-400 text-xs transition-transform duration-200"></i>
+                </div>
+                <div class="faq-answer" style="max-height:0;opacity:0;overflow:hidden;padding:0 20px">
+                    <div class="pb-4">
+                        <div class="mb-3"><h5 class="text-xs font-semibold text-gray-600 mb-2">解答要点</h5><p class="text-xs text-gray-600 leading-relaxed">"分类"是指按照平台的服务领域（通用型/行业型）和功能定位（资源管理/协同制造/分析优化）进行类型划分。"分级"是指按照平台的能力水平，划分为基础级、增强级和先进级三个等级。适用于在中国境内注册运营的各类工业互联网平台企业。</p></div>
+                        <div class="flex items-center gap-4 text-[11px]"><span class="text-gray-400"><i class="fas fa-link mr-1"></i>关联标准：<a class="text-blue-600 hover:underline cursor-pointer">GB/T 42021-2023 第2条</a></span></div>
+                    </div>
+                </div>
+            </div>
+            <div class="glass-card rounded-xl overflow-hidden">
+                <div class="faq-item px-5 py-4 cursor-pointer flex items-center justify-between" onclick="toggleFaq(this)">
+                    <div class="flex items-center gap-3"><span class="bg-emerald-50 text-emerald-600 text-[10px] px-2 py-0.5 rounded-full font-medium whitespace-nowrap">申报操作类</span><span class="text-sm text-gray-800">申报评定的具体流程和时间节点是怎样的？</span></div>
+                    <i class="fas fa-chevron-down text-gray-400 text-xs transition-transform duration-200"></i>
+                </div>
+                <div class="faq-answer" style="max-height:0;opacity:0;overflow:hidden;padding:0 20px">
+                    <div class="pb-4">
+                        <div class="mb-3"><h5 class="text-xs font-semibold text-gray-600 mb-2">解答要点</h5><p class="text-xs text-gray-600 leading-relaxed">申报评定流程包括五个阶段：<br>1. 企业自评：企业根据标准要求完成自评估报告<br>2. 材料提交：在指定窗口期内提交全部申报材料<br>3. 专家评审：由评审委员会组织专家进行书面评审和现场评估<br>4. 结果公示：评审结果在官方平台公示不少于15个工作日<br>5. 证书颁发：公示无异议后颁发分类分级认定证书，有效期3年</p></div>
+                        <div class="flex items-center gap-4 text-[11px]"><span class="text-gray-400"><i class="fas fa-link mr-1"></i>关联标准：<a class="text-blue-600 hover:underline cursor-pointer">GB/T 40118-2021 第6章</a></span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="flex items-center justify-between mt-6"><span class="text-xs text-gray-400">显示 1-6 / 共 42 条</span><div class="flex items-center gap-1"><button class="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center text-gray-400 hover:bg-gray-50 text-xs"><i class="fas fa-chevron-left"></i></button><button class="w-8 h-8 rounded-lg bg-amber-500 text-white flex items-center justify-center text-xs font-medium">1</button><button class="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50 text-xs">2</button><button class="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50 text-xs">3</button><span class="text-gray-400 text-xs px-1">...</span><button class="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50 text-xs">7</button><button class="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center text-gray-400 hover:bg-gray-50 text-xs"><i class="fas fa-chevron-right"></i></button></div></div>
+    </section>
+
+    </div><!-- end p-8 -->
+</main>
+
+<!-- ==================== MODALS ==================== -->
+<!-- Upload Modal -->
+<div id="uploadModal" class="fixed inset-0 z-50 hidden">
+    <div class="modal-overlay absolute inset-0 bg-black/40 backdrop-blur-sm" onclick="closeModal('uploadModal')"></div>
+    <div class="modal-panel absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[520px] bg-white rounded-2xl shadow-2xl p-6">
+        <div class="flex items-center justify-between mb-5"><h3 class="text-lg font-semibold text-gray-800">上传标准文件</h3><button onclick="closeModal('uploadModal')" class="w-8 h-8 rounded-lg hover:bg-gray-100 flex items-center justify-center text-gray-400"><i class="fas fa-times"></i></button></div>
+        <div class="space-y-4">
+            <div><label class="text-xs text-gray-500 mb-1 block">文件编号</label><input type="text" class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-300" placeholder="如 GB/T XXXXX-2024"></div>
+            <div><label class="text-xs text-gray-500 mb-1 block">文件名称</label><input type="text" class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-300" placeholder="输入标准文件全称"></div>
+            <div class="grid grid-cols-2 gap-4">
+                <div><label class="text-xs text-gray-500 mb-1 block">文件分类</label><select class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-300 bg-white"><option>国家标准</option><option>地方标准</option><option>行业标准</option></select></div>
+                <div><label class="text-xs text-gray-500 mb-1 block">发布时间</label><input type="date" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-300"></div>
+            </div>
+            <div><label class="text-xs text-gray-500 mb-1 block">发布机构</label><input type="text" class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-300" placeholder="如 国家标准化管理委员会"></div>
+            <div>
+                <label class="text-xs text-gray-500 mb-1 block">上传文件</label>
+                <div class="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center hover:border-blue-400 transition-all cursor-pointer">
+                    <i class="fas fa-cloud-arrow-up text-3xl text-gray-300 mb-2"></i>
+                    <p class="text-sm text-gray-500">点击或拖拽文件至此区域上传</p>
+                    <p class="text-[11px] text-gray-400 mt-1">支持 PDF、DOC、DOCX 格式，单文件不超过 50MB</p>
+                </div>
+            </div>
+        </div>
+        <div class="flex items-center justify-end gap-3 mt-6">
+            <button onclick="closeModal('uploadModal')" class="px-5 py-2 text-sm text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all">取消</button>
+            <button class="btn-primary px-5 py-2 text-sm text-white rounded-xl" onclick="closeModal('uploadModal')">确认上传</button>
+        </div>
+    </div>
+</div>
+
+<!-- File Detail Modal -->
+<div id="fileDetailModal" class="fixed inset-0 z-50 hidden">
+    <div class="modal-overlay absolute inset-0 bg-black/40 backdrop-blur-sm" onclick="closeModal('fileDetailModal')"></div>
+    <div class="modal-panel absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[680px] max-h-[80vh] overflow-y-auto bg-white rounded-2xl shadow-2xl p-6">
+        <div class="flex items-center justify-between mb-5"><h3 class="text-lg font-semibold text-gray-800">文件详情</h3><button onclick="closeModal('fileDetailModal')" class="w-8 h-8 rounded-lg hover:bg-gray-100 flex items-center justify-center text-gray-400"><i class="fas fa-times"></i></button></div>
+        <div class="space-y-4">
+            <div class="flex items-center gap-3 mb-4"><div class="w-12 h-12 rounded-xl bg-red-50 flex items-center justify-center"><i class="fas fa-file-pdf text-red-500 text-xl"></i></div><div><h4 class="text-base font-medium text-gray-800">GB/T 42021-2023</h4><p class="text-sm text-gray-500">工业互联网平台 分类分级指南</p></div></div>
+            <div class="grid grid-cols-2 gap-4 bg-gray-50 rounded-xl p-4">
+                <div><span class="text-[11px] text-gray-400 block">发布机构</span><span class="text-sm text-gray-700">国家标准化管理委员会</span></div>
+                <div><span class="text-[11px] text-gray-400 block">发布时间</span><span class="text-sm text-gray-700">2023-01-18</span></div>
+                <div><span class="text-[11px] text-gray-400 block">当前版本</span><span class="text-sm text-gray-700">v1.0</span></div>
+                <div><span class="text-[11px] text-gray-400 block">生效状态</span><span class="status-active text-xs px-2 py-0.5 rounded-full">生效中</span></div>
+            </div>
+            <div><h5 class="text-xs font-semibold text-gray-600 mb-2">文件摘要</h5><p class="text-xs text-gray-600 leading-relaxed">本标准规定了工业互联网平台分类分级的基本原则、分类体系、分级标准和评估方法。适用于各类工业互联网平台的分类分级管理工作。</p></div>
+            <div><h5 class="text-xs font-semibold text-gray-600 mb-2">关联材料</h5><div class="space-y-2"><div class="flex items-center gap-2 text-xs text-gray-600 p-2 rounded-lg hover:bg-gray-50"><i class="fas fa-file-alt text-purple-400"></i><span>广东省实施细则</span><span class="ml-auto text-blue-600 cursor-pointer">查看</span></div><div class="flex items-center gap-2 text-xs text-gray-600 p-2 rounded-lg hover:bg-gray-50"><i class="fas fa-video text-blue-400"></i><span>核心条款深度解读视频</span><span class="ml-auto text-blue-600 cursor-pointer">播放</span></div><div class="flex items-center gap-2 text-xs text-gray-600 p-2 rounded-lg hover:bg-gray-50"><i class="fas fa-circle-question text-amber-400"></i><span>相关常见问题 (8条)</span><span class="ml-auto text-blue-600 cursor-pointer">查看</span></div></div></div>
+        </div>
+        <div class="flex items-center justify-end gap-3 mt-6">
+            <button onclick="closeModal('fileDetailModal')" class="px-5 py-2 text-sm text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all">关闭</button>
+            <button class="btn-primary px-5 py-2 text-sm text-white rounded-xl"><i class="fas fa-download mr-1"></i>下载文件</button>
+        </div>
+    </div>
+</div>
+
+<!-- Video Player Modal -->
+<div id="videoPlayerModal" class="fixed inset-0 z-50 hidden">
+    <div class="modal-overlay absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="closeModal('videoPlayerModal')"></div>
+    <div class="modal-panel absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[760px] bg-white rounded-2xl shadow-2xl overflow-hidden">
+        <div class="relative bg-gradient-to-br from-gray-800 to-gray-900 h-[380px] flex items-center justify-center">
+            <div class="text-center">
+                <div class="w-20 h-20 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center mx-auto mb-4 cursor-pointer hover:bg-white/30 transition-all" id="playPauseBtn" onclick="togglePlayPause()">
+                    <i class="fas fa-play text-white text-2xl ml-1" id="playIcon"></i>
+                </div>
+                <p class="text-white/60 text-sm">点击播放视频</p>
+            </div>
+            <div class="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/60">
+                <div class="flex items-center gap-3">
+                    <span class="text-white text-xs">00:00</span>
+                    <div class="flex-1 h-1 bg-white/20 rounded-full overflow-hidden"><div class="h-full w-0 bg-blue-500 rounded-full" id="videoProgress"></div></div>
+                    <span class="text-white text-xs">08:32</span>
+                    <button class="text-white/70 hover:text-white"><i class="fas fa-expand text-sm"></i></button>
+                </div>
+            </div>
+            <button onclick="closeModal('videoPlayerModal')" class="absolute top-4 right-4 w-8 h-8 rounded-lg bg-black/30 hover:bg-black/50 flex items-center justify-center text-white/70 hover:text-white transition-all"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="p-5">
+            <h4 class="text-base font-medium text-gray-800 mb-1">平台分类分级标准核心条款深度解读</h4>
+            <p class="text-xs text-gray-500 mb-3">深入解析分类分级标准的核心要求与实施要点，含字幕与动画演示</p>
+            <div class="flex items-center gap-4 text-[11px] text-gray-400">
+                <span><i class="fas fa-user mr-1"></i>张教授 | 行业专家</span>
+                <span><i class="fas fa-eye mr-1"></i>2,341 次观看</span>
+                <span><i class="fas fa-calendar mr-1"></i>2024-03-01</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Video Upload Modal -->
+<div id="videoUploadModal" class="fixed inset-0 z-50 hidden">
+    <div class="modal-overlay absolute inset-0 bg-black/40 backdrop-blur-sm" onclick="closeModal('videoUploadModal')"></div>
+    <div class="modal-panel absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[520px] bg-white rounded-2xl shadow-2xl p-6">
+        <div class="flex items-center justify-between mb-5"><h3 class="text-lg font-semibold text-gray-800">上传解读视频</h3><button onclick="closeModal('videoUploadModal')" class="w-8 h-8 rounded-lg hover:bg-gray-100 flex items-center justify-center text-gray-400"><i class="fas fa-times"></i></button></div>
+        <div class="space-y-4">
+            <div><label class="text-xs text-gray-500 mb-1 block">视频标题</label><input type="text" class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-300" placeholder="输入视频标题"></div>
+            <div><label class="text-xs text-gray-500 mb-1 block">关联标准</label><select class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-300 bg-white"><option>GB/T 42021-2023 分类分级指南</option><option>GB/T 40118-2021 应用实施指南</option><option>GB/T 41870-2022 通用要求</option></select></div>
+            <div class="grid grid-cols-2 gap-4">
+                <div><label class="text-xs text-gray-500 mb-1 block">解读类型</label><select class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-300 bg-white"><option>专家解读</option><option>政策解析</option><option>案例分析</option><option>实施指导</option></select></div>
+                <div><label class="text-xs text-gray-500 mb-1 block">解读专家</label><input type="text" class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-300" placeholder="专家姓名"></div>
+            </div>
+            <div>
+                <label class="text-xs text-gray-500 mb-1 block">上传视频</label>
+                <div class="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center hover:border-purple-400 transition-all cursor-pointer">
+                    <i class="fas fa-film text-3xl text-gray-300 mb-2"></i>
+                    <p class="text-sm text-gray-500">点击或拖拽视频文件至此区域</p>
+                    <p class="text-[11px] text-gray-400 mt-1">支持 MP4 格式，建议时长 5-10 分钟，不超过 500MB</p>
+                </div>
+            </div>
+        </div>
+        <div class="flex items-center justify-end gap-3 mt-6">
+            <button onclick="closeModal('videoUploadModal')" class="px-5 py-2 text-sm text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all">取消</button>
+            <button class="btn-primary px-5 py-2 text-sm text-white rounded-xl" onclick="closeModal('videoUploadModal')">确认上传</button>
+        </div>
+    </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="fixed top-20 right-8 z-[60] hidden">
+    <div class="bg-white rounded-xl shadow-lg border border-gray-100 px-5 py-3 flex items-center gap-3">
+        <i class="fas fa-check-circle text-emerald-500"></i>
+        <span class="text-sm text-gray-700" id="toastMsg">操作成功</span>
+    </div>
+</div>
+
+<!-- ==================== SCRIPTS ==================== -->
+<script>
+// Page switching
+const pageNames = { 'file-storage':'标准文件分类存储', 'file-search':'标准文件精准检索', 'interpret':'标准解读服务', 'faq':'常见问题库' };
+
+function switchPage(pageId, el) {
+    document.querySelectorAll('.page-section').forEach(s => s.classList.remove('active'));
+    document.getElementById('page-' + pageId).classList.add('active');
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById('breadcrumb-current').textContent = pageNames[pageId] || '';
+    // Show/hide sub navs
+    document.querySelectorAll('[id^="sub-nav-"]').forEach(n => n.classList.add('hidden'));
+    const subNav = document.getElementById('sub-nav-' + pageId);
+    if (subNav) subNav.classList.remove('hidden');
+}
+
+// Sub section switching for file-storage
+function switchSub(subId, el, parentPage) {
+    const parentEl = document.getElementById('page-' + parentPage);
+    parentEl.querySelectorAll('.sub-section').forEach(s => s.classList.remove('active'));
+    document.getElementById('sub-' + subId).classList.add('active');
+    const subNav = document.getElementById('sub-nav-' + parentPage);
+    if (subNav) { subNav.querySelectorAll('.nav-sub-item').forEach(n => n.classList.remove('active')); el.classList.add('active'); }
+}
+
+// Interpret tab switching
+function switchInterpretTab(tabId, el) {
+    document.querySelectorAll('.interpret-content').forEach(c => c.classList.remove('active'));
+    document.getElementById('tab-' + tabId).classList.add('active');
+    if (el) { el.closest('.flex').querySelectorAll('.tab-item').forEach(t => t.classList.remove('active')); el.classList.add('active'); }
+}
+function switchInterpretSub(tabId, el) {
+    switchInterpretTab(tabId);
+    const subNav = document.getElementById('sub-nav-interpret');
+    if (subNav) { subNav.querySelectorAll('.nav-sub-item').forEach(n => n.classList.remove('active')); el.classList.add('active'); }
+}
+
+// Tree toggle
+function toggleTree(node) {
+    const children = node.parentElement.querySelector('.tree-children') || node.nextElementSibling;
+    if (!children || !children.classList.contains('tree-children')) return;
+    const icon = node.querySelector('.fa-chevron-right, .fa-chevron-down');
+    if (!icon) return;
+    const isOpen = children.style.maxHeight !== '0px' && children.style.maxHeight !== '0';
+    if (isOpen) {
+        children.style.maxHeight = '0px'; children.style.opacity = '0';
+        icon.classList.remove('fa-chevron-down'); icon.classList.add('fa-chevron-right');
+    } else {
+        children.style.maxHeight = '500px'; children.style.opacity = '1';
+        icon.classList.remove('fa-chevron-right'); icon.classList.add('fa-chevron-down');
+    }
+}
+
+function expandAllTree() {
+    document.querySelectorAll('#fileTree .tree-children').forEach(c => { c.style.maxHeight = '500px'; c.style.opacity = '1'; });
+    document.querySelectorAll('#fileTree .fa-chevron-right').forEach(i => { i.classList.remove('fa-chevron-right'); i.classList.add('fa-chevron-down'); });
+}
+
+// Preview toggle for search results
+function togglePreview(card) {
+    const panel = card.querySelector('.preview-panel');
+    if (panel) panel.classList.toggle('hidden');
+}
+
+// Article detail toggle
+function toggleArticle(card) {
+    const detail = card.querySelector('.article-detail');
+    if (detail) detail.classList.toggle('hidden');
+    const btn = card.querySelector('button:last-child');
+    if (btn) {
+        const isHidden = detail && detail.classList.contains('hidden');
+        btn.innerHTML = isHidden ? '<i class="fas fa-chevron-down mr-1"></i>展开' : '<i class="fas fa-chevron-up mr-1"></i>收起';
+    }
+}
+
+// FAQ toggle
+function toggleFaq(item) {
+    const answer = item.nextElementSibling;
+    const icon = item.querySelector('.fa-chevron-down, .fa-chevron-up');
+    if (!answer) return;
+    const isOpen = answer.style.maxHeight !== '0px' && answer.style.maxHeight !== '0';
+    if (isOpen) {
+        answer.style.maxHeight = '0px'; answer.style.opacity = '0'; answer.style.padding = '0 20px';
+        if (icon) { icon.classList.remove('fa-chevron-up'); icon.classList.add('fa-chevron-down'); }
+    } else {
+        answer.style.maxHeight = '500px'; answer.style.opacity = '1'; answer.style.padding = '0 20px';
+        if (icon) { icon.classList.remove('fa-chevron-down'); icon.classList.add('fa-chevron-up'); }
+    }
+}
+
+// FAQ category switch
+function switchFaqCat(el, cat) {
+    document.querySelectorAll('.faq-cat-btn').forEach(b => { b.className = 'faq-cat-btn px-4 py-2 rounded-xl text-sm font-medium bg-white text-gray-600 border border-gray-200 hover:bg-gray-50 transition-all'; });
+    el.className = 'faq-cat-btn px-4 py-2 rounded-xl text-sm font-medium bg-amber-500 text-white shadow-md transition-all';
+    showToast('已切换分类筛选');
+}
+
+// Clause selection
+function selectClause(el) {
+    document.querySelectorAll('.clause-item').forEach(c => { c.classList.remove('selected'); c.className = c.className.replace('border-2 border-blue-200 bg-blue-50/50','border border-gray-200'); });
+    el.classList.add('selected');
+    el.className = el.className.replace('border border-gray-200','border-2 border-blue-200 bg-blue-50/50');
+}
+
+// Quick search
+function quickSearch(keyword) {
+    document.getElementById('searchKeyword').value = keyword;
+    performSearch();
+}
+function performSearch() {
+    showToast('检索完成，已更新结果');
+}
+
+// Modal
+function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
+function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+// Video play/pause
+let isPlaying = false;
+function togglePlayPause() {
+    isPlaying = !isPlaying;
+    const icon = document.getElementById('playIcon');
+    const progress = document.getElementById('videoProgress');
+    if (isPlaying) {
+        icon.classList.remove('fa-play'); icon.classList.add('fa-pause'); icon.style.marginLeft = '0';
+        let w = 0;
+        window._videoInterval = setInterval(() => { w += 0.2; if (w > 100) { w = 0; togglePlayPause(); } progress.style.width = w + '%'; }, 100);
+    } else {
+        icon.classList.remove('fa-pause'); icon.classList.add('fa-play'); icon.style.marginLeft = '4px';
+        clearInterval(window._videoInterval);
+    }
+}
+
+// Toast
+function showToast(msg) {
+    const t = document.getElementById('toast');
+    document.getElementById('toastMsg').textContent = msg;
+    t.classList.remove('hidden');
+    setTimeout(() => t.classList.add('hidden'), 2000);
+}
+</script>
+</body>
+</html>

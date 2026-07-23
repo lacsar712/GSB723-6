@@ -1,0 +1,13 @@
+node_modules
+.git
+.DS_Store
+dist
+build
+.env
+.vscode
+.idea
+__pycache__
+.venv
+*.log
+.trae/
+AI_TASK_PROMPTS.md

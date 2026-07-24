@@ -13,4 +13,15 @@ router.post('/generate', auth, [
   validate
 ], ctrl.generate);
 
+router.post('/revoke-batch', auth, [
+  body('ids').isArray({ min: 1, max: 50 }).withMessage('请选择 1-50 个卡密'),
+  body('ids.*').isInt({ min: 1 }).withMessage('卡密ID不合法'),
+  body('reason')
+    .isString()
+    .trim()
+    .isLength({ min: 5, max: 100 })
+    .withMessage('作废原因长度需在 5-100 个字符之间'),
+  validate
+], ctrl.revokeBatch);
+
 module.exports = router;

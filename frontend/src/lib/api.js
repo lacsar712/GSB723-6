@@ -53,5 +53,6 @@ export const api = {
   listCardKeys: params => {
     const qs = new URLSearchParams(params || {}).toString();
     return request(`/card-keys${qs ? `?${qs}` : ''}`);
-  }
+  },
+  revokeCardKeysBatch: payload => request('/card-keys/revoke-batch', { method: 'POST', body: JSON.stringify(payload) })
 };

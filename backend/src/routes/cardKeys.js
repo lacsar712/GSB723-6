@@ -7,6 +7,8 @@ const ctrl = require('../controllers/cardKeyController');
 
 router.get('/', auth, ctrl.listMine);
 
+router.get('/export', auth, ctrl.exportMine);
+
 router.post('/generate', auth, [
   body('application_id').isInt({ min: 1 }).withMessage('应用ID不合法'),
   body('count').isInt({ min: 1, max: 500 }).withMessage('数量必须是 1-500 的整数'),

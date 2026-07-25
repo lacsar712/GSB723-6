@@ -6,6 +6,78 @@ function generateCode() {
   return `CK-${crypto.randomBytes(18).toString('hex')}`;
 }
 
+function buildListFilter(query, agentId) {
+  const application_id = query.application_id ? parseInt(query.application_id, 10) : null;
+  const status = query.status || null;
+  const keyword = (query.keyword || '').trim();
+  const revoked_start = (query.revoked_start || '').trim();
+  const revoked_end = (query.revoked_end || '').trim();
+
+  const where = { agent_id: agentId };
+
+  if (application_id && Number.isFinite(application_id)) {
+    where.application_id = application_id;
+  }
+  if (status && ['unused', 'used', 'revoked', 'redeemed'].includes(status)) {
+    where.status = status;
+  }
+  if (keyword) {
+    where.code = { [Op.like]: `%${keyword}%` };
+  }
+
+  const revokedWhere = [];
+  if (revoked_start) {
+    const startDate = new Date(revoked_start);
+    if (isNaN(startDate.getTime())) {
+      throw Object.assign(new Error('作废起始日期格式错误'), { status: 400 });
+    }
+    startDate.setHours(0, 0, 0, 0);
+    revokedWhere.push({ [Op.gte]: startDate });
+  }
+  if (revoked_end) {
+    const endDate = new Date(revoked_end);
+    if (isNaN(endDate.getTime())) {
+      throw Object.assign(new Error('作废结束日期格式错误'), { status: 400 });
+    }
+    endDate.setHours(23, 59, 59, 999);
+    revokedWhere.push({ [Op.lte]: endDate });
+  }
+  if (revokedWhere.length > 0) {
+    where.revoked_at = { [Op.and]: revokedWhere };
+  }
+
+  return where;
+}
+
+function csvEscape(val) {
+  if (val === null || val === undefined) return '';
+  const s = String(val);
+  if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
+    return '"' + s.replace(/"/g, '""') + '"';
+  }
+  return s;
+}
+
+function formatDate(d) {
+  if (!d) return '';
+  const dt = d instanceof Date ? d : new Date(d);
+  if (isNaN(dt.getTime())) return '';
+  const y = dt.getFullYear();
+  const m = String(dt.getMonth() + 1).padStart(2, '0');
+  const day = String(dt.getDate()).padStart(2, '0');
+  const hh = String(dt.getHours()).padStart(2, '0');
+  const mm = String(dt.getMinutes()).padStart(2, '0');
+  const ss = String(dt.getSeconds()).padStart(2, '0');
+  return `${y}-${m}-${day} ${hh}:${mm}:${ss}`;
+}
+
+const STATUS_LABELS = {
+  unused: '未使用',
+  used: '已使用',
+  redeemed: '已使用',
+  revoked: '已作废'
+};
+
 exports.generate = async (req, res, next) => {
   try {
     const { application_id, count } = req.body;
@@ -53,24 +125,15 @@ exports.listMine = async (req, res, next) => {
   try {
     const limit = Math.min(parseInt(req.query.limit, 10) || 20, 200);
     const offset = parseInt(req.query.offset, 10) || 0;
-    const application_id = req.query.application_id ? parseInt(req.query.application_id, 10) : null;
-    const status = req.query.status || null;
-    const keyword = (req.query.keyword || '').trim();
 
-    const where = { agent_id: req.agent.id };
-    if (application_id && Number.isFinite(application_id)) {
-      where.application_id = application_id;
-    }
-    if (status && ['unused', 'used', 'revoked'].includes(status)) {
-      where.status = status;
-    }
-    if (keyword) {
-      where.code = { [Op.like]: `%${keyword}%` };
-    }
+    const where = buildListFilter(req.query, req.agent.id);
 
     const { count, rows } = await CardKey.findAndCountAll({
       where,
-      include: [{ model: Application, as: 'application', attributes: ['id', 'name'] }],
+      include: [
+        { model: Application, as: 'application', attributes: ['id', 'name'] },
+        { model: Agent, as: 'agent', attributes: ['id', 'name'] }
+      ],
       order: [['id', 'DESC']],
       limit,
       offset,
@@ -79,6 +142,53 @@ exports.listMine = async (req, res, next) => {
 
     res.json({ items: rows, total: count, limit, offset });
   } catch (err) {
+    if (err.status === 400) return res.status(400).json({ error: err.message });
+    next(err);
+  }
+};
+
+exports.exportMine = async (req, res, next) => {
+  try {
+    const where = buildListFilter(req.query, req.agent.id);
+
+    const count = await CardKey.count({ where });
+    if (count > 5000) {
+      return res.status(400).json({ error: `当前筛选结果共 ${count} 条，超过导出上限 5000 条，请缩小筛选范围后再导出` });
+    }
+
+    const rows = await CardKey.findAll({
+      where,
+      include: [
+        { model: Application, as: 'application', attributes: ['id', 'name'] },
+        { model: Agent, as: 'agent', attributes: ['id', 'name'] }
+      ],
+      order: [['id', 'DESC']]
+    });
+
+    const headers = ['卡密(code)', '绑定应用(application)', '状态(status)', '生成时间(createdAt)', '作废时间(revoked_at)', '作废原因(revoke_reason)', '操作人(agent)'];
+    const lines = [headers.map(csvEscape).join(',')];
+
+    for (const row of rows) {
+      const line = [
+        row.code,
+        row.application?.name || '',
+        STATUS_LABELS[row.status] || row.status,
+        formatDate(row.createdAt),
+        formatDate(row.revoked_at),
+        row.revoke_reason || '',
+        row.agent?.name || ''
+      ].map(csvEscape).join(',');
+      lines.push(line);
+    }
+
+    const BOM = '\uFEFF';
+    const csvContent = BOM + lines.join('\r\n');
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="card-keys-${Date.now()}.csv"`);
+    res.send(csvContent);
+  } catch (err) {
+    if (err.status === 400) return res.status(400).json({ error: err.message });
     next(err);
   }
 };
@@ -122,7 +232,7 @@ exports.revokeBatch = async (req, res, next) => {
           continue;
         }
         if (card.status !== 'unused') {
-          const statusLabel = card.status === 'used' ? '已使用' : card.status === 'revoked' ? '已作废' : card.status;
+          const statusLabel = STATUS_LABELS[card.status] || card.status;
           failures.push({ id, code: card.code, reason: `当前状态为「${statusLabel}」，不可作废` });
           continue;
         }

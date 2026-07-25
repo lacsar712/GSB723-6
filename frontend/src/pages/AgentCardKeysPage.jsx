@@ -1,12 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  Button, Card, Form, InputNumber, Modal, Select, Space, Table, Tag, Typography, Input, notification
+  Button, Card, Collapse, Form, InputNumber, Modal, Select, Space, Table, Tag, Typography, Input, DatePicker, Alert, notification
 } from 'antd';
 import {
   KeyOutlined, CopyOutlined, ReloadOutlined, SearchOutlined,
-  StopOutlined, CheckCircleOutlined, CloseCircleOutlined
+  StopOutlined, CheckCircleOutlined, CloseCircleOutlined, ExportOutlined
 } from '@ant-design/icons';
 import { api } from '../lib/api.js';
+
+const { RangePicker } = DatePicker;
 
 const STATUS_OPTIONS = [
   { label: '未使用', value: 'unused' },
@@ -16,13 +18,19 @@ const STATUS_OPTIONS = [
 
 function statusTag(status) {
   if (status === 'unused') return <Tag color="blue" icon={<CheckCircleOutlined />}>未使用</Tag>;
-  if (status === 'used') return <Tag color="green" icon={<CheckCircleOutlined />}>已使用</Tag>;
+  if (status === 'used' || status === 'redeemed') return <Tag color="green" icon={<CheckCircleOutlined />}>已使用</Tag>;
   if (status === 'revoked') return <Tag color="red" icon={<CloseCircleOutlined />}>已作废</Tag>;
   return <Tag>{status}</Tag>;
 }
 
+function formatDate(v) {
+  if (!v) return '-';
+  try { return new Date(v).toLocaleString(); } catch { return '-'; }
+}
+
 export default function AgentCardKeysPage({ agent: initialAgent, onRefresh }) {
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
   const [apps, setApps] = useState([]);
   const [items, setItems] = useState([]);
   const [total, setTotal] = useState(0);
@@ -47,17 +55,28 @@ export default function AgentCardKeysPage({ agent: initialAgent, onRefresh }) {
     return Math.max(0, agent.card_quota_total - agent.card_quota_used - agent.card_quota_reserved);
   }, [agent]);
 
+  function getFilterParams() {
+    const filters = filterForm.getFieldsValue();
+    const params = {};
+    if (filters.application_id) params.application_id = filters.application_id;
+    if (filters.status) params.status = filters.status;
+    if (filters.keyword) params.keyword = filters.keyword.trim();
+    if (filters.revoked_range && filters.revoked_range.length === 2) {
+      const [start, end] = filters.revoked_range;
+      if (start) params.revoked_start = start.format('YYYY-MM-DD');
+      if (end) params.revoked_end = end.format('YYYY-MM-DD');
+    }
+    return params;
+  }
+
   async function fetchList(pageNum = 1) {
     setLoading(true);
     try {
-      const filters = filterForm.getFieldsValue();
       const params = {
+        ...getFilterParams(),
         limit: pageSize,
         offset: (pageNum - 1) * pageSize
       };
-      if (filters.application_id) params.application_id = filters.application_id;
-      if (filters.status) params.status = filters.status;
-      if (filters.keyword) params.keyword = filters.keyword.trim();
 
       const data = await api.listCardKeys(params);
       setItems(data.items || []);
@@ -94,6 +113,28 @@ export default function AgentCardKeysPage({ agent: initialAgent, onRefresh }) {
     fetchList(1);
   }
 
+  async function handleExport() {
+    setExporting(true);
+    try {
+      const params = getFilterParams();
+      const res = await api.exportCardKeys(params);
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `card-keys-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      notification.success({ message: '导出成功', placement: 'topRight' });
+    } catch {
+      notification.error({ message: '导出失败', placement: 'topRight' });
+    } finally {
+      setExporting(false);
+    }
+  }
+
   async function handleCopySelected() {
     const selected = items.filter(item => selectedRowKeys.includes(item.id));
     const text = selected.map(s => s.code).join('\n');
@@ -106,6 +147,10 @@ export default function AgentCardKeysPage({ agent: initialAgent, onRefresh }) {
   }
 
   async function handleRevoke() {
+    if (selectedRowKeys.length > 50) {
+      notification.error({ message: '单次批量作废不能超过 50 条', placement: 'topRight' });
+      return;
+    }
     try {
       const values = await revokeForm.validateFields();
       setRevoking(true);
@@ -125,14 +170,15 @@ export default function AgentCardKeysPage({ agent: initialAgent, onRefresh }) {
         setSelectedRowKeys([]);
 
         if (failures.length > 0) {
+          const summary = failures.slice(0, 3).map(f => `· ${f.code || f.id}：${f.reason}`).join('\n');
           notification.warning({
-            message: `成功作废 ${successCount} 条，${failures.length} 条失败`,
-            description: failures.slice(0, 5).map(f => `${f.code || f.id}: ${f.reason}`).join('；') + (failures.length > 5 ? '...' : ''),
+            message: `作废完成：成功 ${successCount} 条，失败 ${failures.length} 条`,
+            description: summary + (failures.length > 3 ? `\n· ...共 ${failures.length} 条失败` : ''),
             placement: 'topRight',
-            duration: 6
+            duration: 7
           });
         } else {
-          notification.success({ message: `成功作废 ${successCount} 条卡密，额度已回补`, placement: 'topRight' });
+          notification.success({ message: `作废成功：共 ${successCount} 条，额度已回补`, placement: 'topRight' });
         }
 
         await fetchList(page);
@@ -145,13 +191,22 @@ export default function AgentCardKeysPage({ agent: initialAgent, onRefresh }) {
   const columns = [
     { title: '卡密', dataIndex: 'code', key: 'code', render: v => <Typography.Text code copyable={false}>{v}</Typography.Text> },
     { title: '绑定应用', dataIndex: 'application', key: 'application', render: a => a?.name || '-' },
-    { title: '状态', dataIndex: 'status', key: 'status', width: 110, render: s => statusTag(s) },
-    { title: '生成时间', dataIndex: 'createdAt', key: 'createdAt', width: 180, render: v => (v ? new Date(v).toLocaleString() : '-') }
+    { title: '状态', dataIndex: 'status', key: 'status', width: 100, render: s => statusTag(s) },
+    { title: '生成时间', dataIndex: 'createdAt', key: 'createdAt', width: 170, render: formatDate },
+    { title: '作废时间', dataIndex: 'revoked_at', key: 'revoked_at', width: 170, render: formatDate },
+    { title: '作废原因', dataIndex: 'revoke_reason', key: 'revoke_reason', width: 180, ellipsis: true, render: v => v || '-' },
+    { title: '操作人', dataIndex: 'agent', key: 'agent', width: 100, render: a => a?.name || '-' }
   ];
 
   const rowSelection = {
     selectedRowKeys,
-    onChange: setSelectedRowKeys,
+    onChange: (keys) => {
+      if (keys.length > 50) {
+        notification.warning({ message: '最多只能选择 50 条进行批量操作', placement: 'topRight' });
+        return;
+      }
+      setSelectedRowKeys(keys);
+    },
     getCheckboxProps: (record) => ({
       disabled: record.status !== 'unused'
     })
@@ -173,7 +228,10 @@ export default function AgentCardKeysPage({ agent: initialAgent, onRefresh }) {
       <Card bordered={false} style={{ borderRadius: 16, boxShadow: '0 12px 30px rgba(0,0,0,0.06)', background: 'rgba(255,255,255,0.75)', backdropFilter: 'blur(16px)' }}>
         <Space style={{ width: '100%', justifyContent: 'space-between', flexWrap: 'wrap' }} size={12}>
           <Space direction="vertical" size={2}>
-            <Typography.Title level={4} style={{ margin: 0 }}>卡密管理</Typography.Title>
+            <Space size={8} wrap>
+              <Typography.Title level={4} style={{ margin: 0 }}>卡密管理</Typography.Title>
+              <Tag color="geekblue" style={{ margin: 0, fontSize: 11, borderRadius: 6 }}>卡密域规范附录 v1（R5）</Tag>
+            </Space>
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>生成绑定应用的卡密，并占用当前账号额度</Typography.Text>
           </Space>
           <Button icon={<ReloadOutlined />} onClick={() => reload()} style={{ borderRadius: 12 }}>刷新</Button>
@@ -229,22 +287,69 @@ export default function AgentCardKeysPage({ agent: initialAgent, onRefresh }) {
       </Card>
 
       <Card bordered={false} style={cardStyle}>
-        <Form form={filterForm} layout="inline" style={{ marginBottom: 16 }} onFinish={handleSearch}>
-          <Form.Item name="application_id" style={{ minWidth: 200 }}>
+        <Collapse
+          size="small"
+          style={{ marginBottom: 16, background: 'rgba(22,119,255,0.02)', border: '1px solid rgba(22,119,255,0.12)' }}
+          items={[{
+            key: 'rules',
+            label: <Typography.Text strong>📋 规则说明</Typography.Text>,
+            children: (
+              <Alert
+                type="info"
+                showIcon={false}
+                style={{ background: 'transparent', border: 'none', padding: 0 }}
+                description={
+                  <ul style={{ margin: 0, paddingLeft: 20, fontSize: 13, lineHeight: 1.8 }}>
+                    <li><strong>作废条件：</strong>仅状态为「未使用」的卡密允许作废；已使用/已作废的卡密无法再次作废。</li>
+                    <li><strong>批量上限：</strong>单次批量作废最多选择 <strong>50 条</strong>卡密，超过请分批操作。</li>
+                    <li><strong>作废原因：</strong>必填，去除首尾空格后长度需在 <strong>5～100 个字符</strong>之间。</li>
+                    <li><strong>部分成功：</strong>若勾选的卡密中混有不可作废的（如已使用/已作废），可作废的照常处理，不可作废的返回失败明细，不影响其他卡密。</li>
+                    <li><strong>额度回补：</strong>作废成功后，账号「已使用额度」按<strong>实际成功作废的条数</strong>扣减（非按勾选条数），可用剩余额度同步回补。</li>
+                    <li><strong>数据导出：</strong>导出 CSV 与上方筛选条件联动，最多导出 <strong>5000 条</strong>，超出请缩小筛选范围。</li>
+                  </ul>
+                }
+              />
+            )
+          }]}
+        />
+
+        <Form form={filterForm} layout="inline" style={{ marginBottom: 16, rowGap: 12 }} onFinish={handleSearch}>
+          <Form.Item name="application_id" style={{ minWidth: 180 }}>
             <Select placeholder="绑定应用" allowClear options={appOptions} />
           </Form.Item>
-          <Form.Item name="status" style={{ minWidth: 140 }}>
+          <Form.Item name="status" style={{ minWidth: 130 }}>
             <Select placeholder="状态" allowClear options={STATUS_OPTIONS} />
           </Form.Item>
-          <Form.Item name="keyword" style={{ minWidth: 200 }}>
+          <Form.Item name="keyword" style={{ minWidth: 180 }}>
             <Input placeholder="搜索卡密" allowClear onPressEnter={handleSearch} />
+          </Form.Item>
+          <Form.Item name="revoked_range" style={{ minWidth: 260 }}>
+            <RangePicker placeholder={['作废起始日期', '作废结束日期']} style={{ width: '100%' }} />
           </Form.Item>
           <Form.Item>
             <Space>
               <Button type="primary" icon={<SearchOutlined />} htmlType="submit">查询</Button>
               <Button onClick={handleReset}>重置</Button>
+              <Button
+                icon={<ExportOutlined />}
+                loading={exporting}
+                onClick={handleExport}
+                disabled={total > 5000}
+              >
+                导出 CSV
+              </Button>
             </Space>
           </Form.Item>
+          {total > 5000 && (
+            <Typography.Text type="danger" style={{ fontSize: 12, marginLeft: 8 }}>
+              当前筛选共 {total} 条，超过导出上限 5000 条，请缩小筛选范围
+            </Typography.Text>
+          )}
+          {total > 0 && total <= 5000 && (
+            <Typography.Text type="secondary" style={{ fontSize: 12, marginLeft: 8 }}>
+              将导出 {total} 条记录
+            </Typography.Text>
+          )}
         </Form>
 
         {selectedRowKeys.length > 0 && (
@@ -290,6 +395,7 @@ export default function AgentCardKeysPage({ agent: initialAgent, onRefresh }) {
           columns={columns}
           dataSource={items}
           rowSelection={rowSelection}
+          scroll={{ x: 1100 }}
           pagination={{
             current: page,
             pageSize,

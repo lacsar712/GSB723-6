@@ -112,7 +112,7 @@ export default function AgentAgentsPage({ agent, onRefresh }) {
               代理管理
             </Typography.Title>
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              当前账号可用额度：{remaining}
+              当前账号可用额度：{remaining} · 近7日作废成功：{agent.revoked_7d ?? 0} 条
             </Typography.Text>
           </Space>
           <Space size={10} style={{ flexWrap: 'wrap' }}>

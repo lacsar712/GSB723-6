@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { Agent, Application } = require('../models');
+const { Op } = require('sequelize');
+const { Agent, Application, CardKey } = require('../models');
 const logger = require('../utils/logger');
 const { computeNameHash } = require('../utils/nameHash');
 
@@ -64,7 +65,21 @@ exports.me = async (req, res, next) => {
       include: [{ model: Application, as: 'application', attributes: ['id', 'name'] }]
     });
     if (!agent) return res.status(404).json({ error: '账号不存在' });
-    res.json(agent);
+
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+    const revoked_7d = await CardKey.count({
+      where: {
+        agent_id: agent.id,
+        status: 'revoked',
+        revoked_at: { [Op.gte]: sevenDaysAgo }
+      }
+    });
+
+    const result = agent.toJSON();
+    result.revoked_7d = revoked_7d;
+    res.json(result);
   } catch (err) {
     next(err);
   }

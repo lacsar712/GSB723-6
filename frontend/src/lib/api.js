@@ -54,5 +54,9 @@ export const api = {
     const qs = new URLSearchParams(params || {}).toString();
     return request(`/card-keys${qs ? `?${qs}` : ''}`);
   },
-  revokeCardKeysBatch: payload => request('/card-keys/revoke-batch', { method: 'POST', body: JSON.stringify(payload) })
+  revokeCardKeysBatch: payload => request('/card-keys/revoke-batch', { method: 'POST', body: JSON.stringify(payload) }),
+  exportCardKeys: params => {
+    const qs = new URLSearchParams(params || {}).toString();
+    return request(`/card-keys/export${qs ? `?${qs}` : ''}`);
+  }
 };

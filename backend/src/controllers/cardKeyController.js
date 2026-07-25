@@ -8,6 +8,88 @@ function generateCode() {
 
 const REVOCABLE_STATUS = new Set(['unused']);
 const REVOKE_MAX = 50;
+const EXPORT_MAX = 5000;
+
+function buildWhereClause(query, agentId) {
+  const where = { agent_id: agentId };
+  const { application_id, status, keyword, revoked_from, revoked_to } = query;
+
+  if (application_id) {
+    const id = parseInt(application_id, 10);
+    if (Number.isFinite(id) && id > 0) where.application_id = id;
+  }
+
+  if (status) {
+    const statusList = String(status).split(',').map(s => s.trim()).filter(Boolean);
+    if (statusList.length === 1) {
+      where.status = statusList[0];
+    } else if (statusList.length > 1) {
+      where.status = { [Op.in]: statusList };
+    }
+  }
+
+  if (keyword) {
+    const kw = String(keyword).trim();
+    if (kw) where.code = { [Op.like]: `%${kw}%` };
+  }
+
+  if (revoked_from || revoked_to) {
+    const dateCond = {};
+    if (revoked_from) {
+      const d = new Date(revoked_from);
+      if (isNaN(d.getTime())) {
+        return { error: '作废起始日期格式错误（应为 YYYY-MM-DD）' };
+      }
+      dateCond[Op.gte] = d;
+    }
+    if (revoked_to) {
+      const d = new Date(revoked_to + 'T23:59:59');
+      if (isNaN(d.getTime())) {
+        return { error: '作废结束日期格式错误（应为 YYYY-MM-DD）' };
+      }
+      dateCond[Op.lte] = d;
+    }
+    where.revoked_at = dateCond;
+    if (!where.status) {
+      where.status = 'revoked';
+    }
+  }
+
+  return { where };
+}
+
+const STATUS_TEXT = {
+  unused: '未使用',
+  used: '已使用',
+  redeemed: '已使用',
+  revoked: '已作废'
+};
+
+function csvEscape(val) {
+  if (val === null || val === undefined) return '';
+  const s = String(val);
+  if (/[",\n\r]/.test(s)) {
+    return '"' + s.replace(/"/g, '""') + '"';
+  }
+  return s;
+}
+
+function toCsv(rows) {
+  const header = ['code', 'application', 'status', 'createdAt', 'revoked_at', 'revoked_reason', 'revoked_by'];
+  const lines = [header.join(',')];
+  for (const r of rows) {
+    lines.push([
+      csvEscape(r.code),
+      csvEscape(r.application?.name || ''),
+      csvEscape(STATUS_TEXT[r.status] || r.status || ''),
+      csvEscape(r.createdAt ? new Date(r.createdAt).toISOString() : ''),
+      csvEscape(r.revoked_at ? new Date(r.revoked_at).toISOString() : ''),
+      csvEscape(r.revoked_reason || ''),
+      csvEscape(r.revoked_by || '')
+    ].join(','));
+  }
+  return '\uFEFF' + lines.join('\r\n');
+}
 
 exports.generate = async (req, res, next) => {
   try {
@@ -66,28 +148,11 @@ exports.listMine = async (req, res, next) => {
       realOffset = (page - 1) * realLimit;
     }
 
-    const { application_id, status, keyword } = req.query;
-
-    const where = { agent_id: req.agent.id };
-    if (application_id) {
-      const id = parseInt(application_id, 10);
-      if (Number.isFinite(id) && id > 0) where.application_id = id;
-    }
-    if (status) {
-      const statusList = String(status).split(',').map(s => s.trim()).filter(Boolean);
-      if (statusList.length === 1) {
-        where.status = statusList[0];
-      } else if (statusList.length > 1) {
-        where.status = { [Op.in]: statusList };
-      }
-    }
-    if (keyword) {
-      const kw = String(keyword).trim();
-      if (kw) where.code = { [Op.like]: `%${kw}%` };
-    }
+    const built = buildWhereClause(req.query, req.agent.id);
+    if (built.error) return res.status(400).json({ error: built.error });
 
     const { rows, count } = await CardKey.findAndCountAll({
-      where,
+      where: built.where,
       include: [{ model: Application, as: 'application', attributes: ['id', 'name'] }],
       order: [['id', 'DESC']],
       limit: realLimit,
@@ -103,6 +168,57 @@ exports.listMine = async (req, res, next) => {
       page: Number.isFinite(page) && page >= 1 ? page : Math.floor(realOffset / realLimit) + 1,
       pageSize: realLimit
     });
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.revokeStats = async (req, res, next) => {
+  try {
+    let days = parseInt(req.query.days, 10);
+    if (!Number.isFinite(days) || days < 1) days = 7;
+    if (days > 90) days = 90;
+
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+    const count = await CardKey.count({
+      where: {
+        agent_id: req.agent.id,
+        status: 'revoked',
+        revoked_at: { [Op.gte]: since }
+      }
+    });
+
+    res.json({ days, since: since.toISOString(), count });
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.exportCsv = async (req, res, next) => {
+  try {
+    const built = buildWhereClause(req.query, req.agent.id);
+    if (built.error) return res.status(400).json({ error: built.error });
+
+    const totalCount = await CardKey.count({ where: built.where });
+    if (totalCount > EXPORT_MAX) {
+      return res.status(400).json({
+        error: `当前筛选结果共 ${totalCount} 条，超过导出上限 ${EXPORT_MAX} 条，请缩小筛选范围后重试`
+      });
+    }
+
+    const rows = await CardKey.findAll({
+      where: built.where,
+      include: [{ model: Application, as: 'application', attributes: ['id', 'name'] }],
+      order: [['id', 'DESC']],
+      limit: EXPORT_MAX
+    });
+
+    const csv = toCsv(rows);
+    const filename = `card-keys-${new Date().toISOString().slice(0, 10)}.csv`;
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(csv);
   } catch (err) {
     next(err);
   }
@@ -169,6 +285,7 @@ exports.revokeBatch = async (req, res, next) => {
           {
             status: 'revoked',
             revoked_at: now,
+            revoked_by: agent.name,
             revoked_reason: normalizedReason
           },
           {

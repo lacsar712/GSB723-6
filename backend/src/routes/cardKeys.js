@@ -5,6 +5,10 @@ const auth = require('../middleware/auth');
 const validate = require('../middleware/validate');
 const ctrl = require('../controllers/cardKeyController');
 
+router.get('/revoke-stats', auth, ctrl.revokeStats);
+
+router.get('/export', auth, ctrl.exportCsv);
+
 router.get('/', auth, ctrl.listMine);
 
 router.post('/generate', auth, [

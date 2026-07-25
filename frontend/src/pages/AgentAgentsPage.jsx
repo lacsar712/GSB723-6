@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Button, Card, Form, Input, InputNumber, Modal, Select, Space, Table, Typography } from 'antd';
-import { PlusOutlined, NodeIndexOutlined, ReloadOutlined, EditOutlined } from '@ant-design/icons';
+import { Button, Card, Form, Input, InputNumber, Modal, Select, Space, Table, Typography, Tooltip } from 'antd';
+import { PlusOutlined, NodeIndexOutlined, ReloadOutlined, EditOutlined, StopOutlined, InfoCircleOutlined } from '@ant-design/icons';
 import { api } from '../lib/api.js';
 import { useNavigate } from 'react-router-dom';
 
@@ -9,6 +9,7 @@ export default function AgentAgentsPage({ agent, onRefresh }) {
   const [loading, setLoading] = useState(true);
   const [children, setChildren] = useState([]);
   const [apps, setApps] = useState([]);
+  const [revoke7d, setRevoke7d] = useState({ count: 0, days: 7, loading: true });
   const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -24,9 +25,14 @@ export default function AgentAgentsPage({ agent, onRefresh }) {
   async function reload() {
     setLoading(true);
     try {
-      const [appsData, childrenData] = await Promise.all([api.listApps(), api.listChildrenAgents()]);
+      const [appsData, childrenData, statsData] = await Promise.all([
+        api.listApps(),
+        api.listChildrenAgents(),
+        api.getRevokeStats(7).catch(() => ({ count: 0, days: 7 }))
+      ]);
       setApps(appsData);
       setChildren(childrenData);
+      setRevoke7d({ count: statsData?.count ?? 0, days: statsData?.days ?? 7, loading: false });
     } finally {
       setLoading(false);
     }
@@ -111,9 +117,19 @@ export default function AgentAgentsPage({ agent, onRefresh }) {
             <Typography.Title level={4} style={{ margin: 0 }}>
               代理管理
             </Typography.Title>
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              当前账号可用额度：{remaining}
-            </Typography.Text>
+            <Space size={18} style={{ flexWrap: 'wrap' }}>
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                当前账号可用额度：{remaining}
+              </Typography.Text>
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                <StopOutlined style={{ color: '#bfbfbf', marginRight: 4 }} />
+                近 7 日作废成功数：
+                <Typography.Text strong style={{ color: '#8c8c8c' }}>{revoke7d.count}</Typography.Text>
+                <Tooltip title="统计当前账号在最近 7 天内作废成功的卡密数量（含已回补额度的作废记录）。">
+                  <InfoCircleOutlined style={{ marginLeft: 4, color: '#bfbfbf' }} />
+                </Tooltip>
+              </Typography.Text>
+            </Space>
           </Space>
           <Space size={10} style={{ flexWrap: 'wrap' }}>
             <Button icon={<NodeIndexOutlined />} onClick={() => navigate('/agent/hierarchy')} style={{ borderRadius: 12 }}>

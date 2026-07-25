@@ -58,5 +58,43 @@ export const api = {
     const qs = new URLSearchParams(clean).toString();
     return request(`/card-keys${qs ? `?${qs}` : ''}`);
   },
-  revokeCardKeys: payload => request('/card-keys/revoke-batch', { method: 'POST', body: JSON.stringify(payload) })
+  revokeCardKeys: payload => request('/card-keys/revoke-batch', { method: 'POST', body: JSON.stringify(payload) }),
+  getRevokeStats: (days = 7) => request(`/card-keys/revoke-stats?days=${days}`),
+
+  exportCardKeys: async (params = {}) => {
+    const clean = {};
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== '') clean[k] = v;
+    });
+    const qs = new URLSearchParams(clean).toString();
+    const url = `/api/card-keys/export${qs ? `?${qs}` : ''}`;
+    const token = localStorage.getItem('token');
+    const res = await fetch(url, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {}
+    });
+    if (!res.ok) {
+      let message = `导出失败 (${res.status})`;
+      try {
+        const data = await res.json();
+        if (data?.error) message = data.error;
+      } catch {}
+      const err = new Error(message);
+      err.status = res.status;
+      throw err;
+    }
+    const blob = await res.blob();
+    const disposition = res.headers.get('Content-Disposition') || '';
+    let filename = 'card-keys.csv';
+    const match = disposition.match(/filename="?([^"]+)"?/);
+    if (match) filename = decodeURIComponent(match[1]);
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = downloadUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(downloadUrl);
+    return { filename };
+  }
 };

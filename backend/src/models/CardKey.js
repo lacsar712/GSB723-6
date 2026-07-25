@@ -14,6 +14,7 @@ const CardKey = sequelize.define('CardKey', {
   used_at: { type: DataTypes.DATE, allowNull: true },
   redeemed_at: { type: DataTypes.DATE, allowNull: true },
   revoked_at: { type: DataTypes.DATE, allowNull: true },
+  revoked_by: { type: DataTypes.STRING(80), allowNull: true },
   revoked_reason: { type: DataTypes.STRING(200), allowNull: true }
 }, {
   tableName: 'card_keys',

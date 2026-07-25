@@ -90,8 +90,14 @@ async function seed() {
     const demoCodes = [];
     for (let i = 0; i < 8; i++) demoCodes.push(generateCode());
     await CardKey.bulkCreate(demoCodes.map(code => ({ code, application_id: apps[0].id, agent_id: admin.id, status: 'unused' })));
+    // 额外补充不同状态的演示卡密，便于验证按状态筛选（used/revoked 不计入可回补的 used 额度演示）
+    await CardKey.bulkCreate([
+      { code: generateCode(), application_id: apps[0].id, agent_id: admin.id, status: 'used', redeemed_at: new Date() },
+      { code: generateCode(), application_id: apps[1].id, agent_id: admin.id, status: 'used', redeemed_at: new Date() },
+      { code: generateCode(), application_id: apps[0].id, agent_id: admin.id, status: 'revoked', revoked_at: new Date(), revoked_reason: '演示：初始作废样例' }
+    ]);
     await admin.update({ card_quota_used: demoCodes.length });
-    logger.info(`Seeded ${demoCodes.length} card keys for admin`);
+    logger.info(`Seeded ${demoCodes.length} unused card keys (+3 mixed status demo) for admin`);
 
     logger.info('Database seed completed successfully!');
     process.exit(0);

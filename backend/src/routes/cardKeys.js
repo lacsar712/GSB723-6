@@ -13,4 +13,10 @@ router.post('/generate', auth, [
   validate
 ], ctrl.generate);
 
+router.post('/batch-revoke', auth, [
+  body('ids').isArray({ min: 1, max: 50 }).withMessage('单次批量作废数量为 1-50 张'),
+  body('reason').isString().trim().isLength({ min: 5, max: 100 }).withMessage('作废原因必须为 5~100 个字符'),
+  validate
+], ctrl.batchRevoke);
+
 module.exports = router;

@@ -51,7 +51,11 @@ export const api = {
 
   generateCardKeys: payload => request('/card-keys/generate', { method: 'POST', body: JSON.stringify(payload) }),
   listCardKeys: params => {
-    const qs = new URLSearchParams(params || {}).toString();
+    const clean = Object.fromEntries(
+      Object.entries(params || {}).filter(([, v]) => v !== undefined && v !== null && v !== '')
+    );
+    const qs = new URLSearchParams(clean).toString();
     return request(`/card-keys${qs ? `?${qs}` : ''}`);
-  }
+  },
+  revokeCardKeys: payload => request('/card-keys/batch-revoke', { method: 'POST', body: JSON.stringify(payload) })
 };

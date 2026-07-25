@@ -6,8 +6,10 @@ const CardKey = sequelize.define('CardKey', {
   code: { type: DataTypes.STRING(64), allowNull: false, unique: true },
   application_id: { type: DataTypes.INTEGER, allowNull: false },
   agent_id: { type: DataTypes.INTEGER, allowNull: false },
-  status: { type: DataTypes.ENUM('unused', 'redeemed'), allowNull: false, defaultValue: 'unused' },
-  redeemed_at: { type: DataTypes.DATE, allowNull: true }
+  status: { type: DataTypes.ENUM('unused', 'used', 'revoked', 'redeemed'), allowNull: false, defaultValue: 'unused' },
+  redeemed_at: { type: DataTypes.DATE, allowNull: true },
+  revoked_at: { type: DataTypes.DATE, allowNull: true },
+  revoked_reason: { type: DataTypes.STRING(100), allowNull: true }
 }, {
   tableName: 'card_keys',
   indexes: [

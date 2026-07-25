@@ -9,6 +9,7 @@ export default function AgentAgentsPage({ agent, onRefresh }) {
   const [loading, setLoading] = useState(true);
   const [children, setChildren] = useState([]);
   const [apps, setApps] = useState([]);
+  const [revoked7d, setRevoked7d] = useState(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -29,6 +30,13 @@ export default function AgentAgentsPage({ agent, onRefresh }) {
       setChildren(childrenData);
     } finally {
       setLoading(false);
+    }
+    // 只读统计单独加载，失败不阻塞主列表
+    try {
+      const stats = await api.cardKeyStats();
+      setRevoked7d(stats?.revoked_success_last_7d ?? 0);
+    } catch {
+      /* 忽略统计加载失败 */
     }
   }
 
@@ -112,7 +120,7 @@ export default function AgentAgentsPage({ agent, onRefresh }) {
               代理管理
             </Typography.Title>
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              当前账号可用额度：{remaining}
+              当前账号可用额度：{remaining} · 近 7 日作废成功数：{revoked7d ?? '—'}
             </Typography.Text>
           </Space>
           <Space size={10} style={{ flexWrap: 'wrap' }}>

@@ -94,7 +94,7 @@ async function seed() {
     await CardKey.bulkCreate([
       { code: generateCode(), application_id: apps[0].id, agent_id: admin.id, status: 'used', redeemed_at: new Date() },
       { code: generateCode(), application_id: apps[1].id, agent_id: admin.id, status: 'used', redeemed_at: new Date() },
-      { code: generateCode(), application_id: apps[0].id, agent_id: admin.id, status: 'revoked', revoked_at: new Date(), revoked_reason: '演示：初始作废样例' }
+      { code: generateCode(), application_id: apps[0].id, agent_id: admin.id, status: 'revoked', revoked_at: new Date(), revoked_reason: '演示：初始作废样例', revoked_by: admin.id, revoked_by_name: admin.name }
     ]);
     await admin.update({ card_quota_used: demoCodes.length });
     logger.info(`Seeded ${demoCodes.length} unused card keys (+3 mixed status demo) for admin`);

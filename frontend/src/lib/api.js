@@ -57,5 +57,43 @@ export const api = {
     const qs = new URLSearchParams(clean).toString();
     return request(`/card-keys${qs ? `?${qs}` : ''}`);
   },
-  revokeCardKeys: payload => request('/card-keys/batch-revoke', { method: 'POST', body: JSON.stringify(payload) })
+  revokeCardKeys: payload => request('/card-keys/batch-revoke', { method: 'POST', body: JSON.stringify(payload) }),
+  cardKeyStats: () => request('/card-keys/stats'),
+  // 导出当前筛选结果 CSV：与列表共用同一套筛选参数。带 Bearer token，故用 fetch->blob 下载。
+  exportCardKeysCsv: async (params) => {
+    const clean = Object.fromEntries(
+      Object.entries(params || {}).filter(([, v]) => v !== undefined && v !== null && v !== '')
+    );
+    const qs = new URLSearchParams(clean).toString();
+    const headers = new Headers();
+    const token = localStorage.getItem('token');
+    if (token) headers.set('Authorization', `Bearer ${token}`);
+
+    const res = await fetch(`/api/card-keys/export${qs ? `?${qs}` : ''}`, { headers });
+    if (!res.ok) {
+      let message = `导出失败 (${res.status})`;
+      try {
+        const data = await res.json();
+        if (data?.error) message = data.error;
+      } catch {}
+      notification.error({ message: '导出失败', description: message, placement: 'topRight' });
+      const err = new Error(message);
+      err.status = res.status;
+      throw err;
+    }
+
+    const blob = await res.blob();
+    const disposition = res.headers.get('content-disposition') || '';
+    const match = /filename="?([^"]+)"?/.exec(disposition);
+    const filename = match ? match[1] : `card-keys-${Date.now()}.csv`;
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
 };

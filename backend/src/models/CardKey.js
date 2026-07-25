@@ -9,7 +9,9 @@ const CardKey = sequelize.define('CardKey', {
   status: { type: DataTypes.ENUM('unused', 'used', 'revoked', 'redeemed'), allowNull: false, defaultValue: 'unused' },
   redeemed_at: { type: DataTypes.DATE, allowNull: true },
   revoked_at: { type: DataTypes.DATE, allowNull: true },
-  revoked_reason: { type: DataTypes.STRING(100), allowNull: true }
+  revoked_reason: { type: DataTypes.STRING(100), allowNull: true },
+  revoked_by: { type: DataTypes.INTEGER, allowNull: true },
+  revoked_by_name: { type: DataTypes.STRING(80), allowNull: true }
 }, {
   tableName: 'card_keys',
   indexes: [
